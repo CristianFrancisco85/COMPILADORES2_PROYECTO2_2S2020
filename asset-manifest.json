@@ -1,0 +1,26 @@
+{
+  "files": {
+    "main.css": "/COMPILADORES2_PROYECTO2_2S2020/static/css/main.e9dfbb68.chunk.css",
+    "main.js": "/COMPILADORES2_PROYECTO2_2S2020/static/js/main.355549d6.chunk.js",
+    "main.js.map": "/COMPILADORES2_PROYECTO2_2S2020/static/js/main.355549d6.chunk.js.map",
+    "runtime-main.js": "/COMPILADORES2_PROYECTO2_2S2020/static/js/runtime-main.abcd96e6.js",
+    "runtime-main.js.map": "/COMPILADORES2_PROYECTO2_2S2020/static/js/runtime-main.abcd96e6.js.map",
+    "static/css/2.b5f92405.chunk.css": "/COMPILADORES2_PROYECTO2_2S2020/static/css/2.b5f92405.chunk.css",
+    "static/js/2.514c3b18.chunk.js": "/COMPILADORES2_PROYECTO2_2S2020/static/js/2.514c3b18.chunk.js",
+    "static/js/2.514c3b18.chunk.js.map": "/COMPILADORES2_PROYECTO2_2S2020/static/js/2.514c3b18.chunk.js.map",
+    "index.html": "/COMPILADORES2_PROYECTO2_2S2020/index.html",
+    "precache-manifest.6c6d5d29e80336ddb8a5672cb6bec914.js": "/COMPILADORES2_PROYECTO2_2S2020/precache-manifest.6c6d5d29e80336ddb8a5672cb6bec914.js",
+    "service-worker.js": "/COMPILADORES2_PROYECTO2_2S2020/service-worker.js",
+    "static/css/2.b5f92405.chunk.css.map": "/COMPILADORES2_PROYECTO2_2S2020/static/css/2.b5f92405.chunk.css.map",
+    "static/css/main.e9dfbb68.chunk.css.map": "/COMPILADORES2_PROYECTO2_2S2020/static/css/main.e9dfbb68.chunk.css.map",
+    "static/js/2.514c3b18.chunk.js.LICENSE.txt": "/COMPILADORES2_PROYECTO2_2S2020/static/js/2.514c3b18.chunk.js.LICENSE.txt",
+    "static/media/logo.svg": "/COMPILADORES2_PROYECTO2_2S2020/static/media/logo.5d5d9eef.svg"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.abcd96e6.js",
+    "static/css/2.b5f92405.chunk.css",
+    "static/js/2.514c3b18.chunk.js",
+    "static/css/main.e9dfbb68.chunk.css",
+    "static/js/main.355549d6.chunk.js"
+  ]
+}
