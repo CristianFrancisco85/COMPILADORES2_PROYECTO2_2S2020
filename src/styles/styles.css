@@ -1,0 +1,25 @@
+.textCode {
+    white-space: pre;
+    font-family: monospace;
+    font-size: 12pt;
+    height: 500px;
+    width: 500px;
+}
+
+.divcontent {
+    display: block;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+    padding-bottom: 25px;
+}
+
+h4{
+    display: inline-block;
+    float: left;
+}
+
+.CodeMirror.cm-s-darcula {
+    height: 500px;
+}
+
