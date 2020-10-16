@@ -52,7 +52,7 @@ class TablaSimbolos {
             return simb.ID===id;
         });
         if(simbolo.length===0){
-            if(tipo2===undefined||tipo2===tipo){
+            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo){
                 this.simbolos.push(crearSimbolo(id,tipo,valor,rol));
             }
             else{
@@ -63,6 +63,47 @@ class TablaSimbolos {
             throw Error("No se puede declarar variable con ID: "+id+", por que ya existe")
         }
         
+    }
+
+    /**
+     * Actualiza el valor de un simbolo
+     * @param id ID del simbolo a actualizar
+     * @param valor Objeto {Valor:..,Tipo:..}
+     */
+    actualizar(id, valor) {
+
+        let simbolo = _.filter(this.simbolos,function(simb) {
+            return simb.ID===id;
+        });
+        simbolo=simbolo[0]
+
+        if(simbolo.rol==="CONST"&&!simbolo.Tipo.includes("ARR")){    
+            throw Error("No se puede cambiar el valor de la constante "+simbolo.ID)
+        }
+
+        else if (simbolo!==undefined) {
+            simbolo.Valor=valor
+        }
+
+        else {
+            throw new Error("Error : variable " + id + " no ha sido definida")
+        }
+    }
+
+    /**
+     * Obtiene el valor de un símbolo
+     * @param id 
+     */
+    getValor(id) {
+
+        let simbolo = _.filter(this.simbolos,function(simb) {
+            return simb.ID===id;
+        });
+        simbolo=simbolo[0]
+        if (simbolo){
+            return simbolo
+        }
+        throw new Error ("Error : variable " + id + " no ha sido definida")
     }
 
     /**
@@ -80,7 +121,8 @@ export function Traducir (Instrucciones){
     PunteroP=0
     ContadorT=0
     ContadorL=0
-    AST=Instrucciones;
+    AST=JSON.parse(JSON.stringify(Instrucciones))
+    BuscarDec(AST,GlobalTS)
     TraducirBloque(AST,GlobalTS)
     console.log(GlobalTS)
     return generarEncabezado()
@@ -104,10 +146,10 @@ function TraducirBloque(Instrucciones,TS){
                 LetDecTo3D(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_CONST){
-
+                ConstDecTo3D(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_TYPE){
-
+                TypeDecExecute(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.ASIGNACION){
 
@@ -125,7 +167,7 @@ function TraducirBloque(Instrucciones,TS){
                 
             }
             else if(instruccion.Tipo===Tipo_Instruccion.SALIDA){
-                
+                ConsoleLogTo3D(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_IF){
                 IfTo3D(instruccion,TS)
@@ -177,7 +219,85 @@ function TraducirBloque(Instrucciones,TS){
 }
 
 /**
- * Traduce una declaracion a 3D
+ * Hace la primera pasada para econtrar declaraciones
+ * @param {*} Instrucciones 
+ * @param {*} TablaSimbolos
+ */
+function BuscarDec(Instrucciones,TablaSimbolos){
+    let auxArr=[];
+    Instrucciones.forEach(instruccion => {
+    try{
+        if(instruccion===undefined){
+            //throw new Error("Intruccion Invalida")
+        }
+        else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_LET){
+            LetDecTo3D(instruccion,TablaSimbolos)
+            auxArr.push(instruccion)
+        }
+        else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_CONST){
+            ConstDecTo3D(instruccion,TablaSimbolos)
+        }
+        else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_TYPE){
+            TypeDecExecute(instruccion,TablaSimbolos);
+        }
+        else if(instruccion.Tipo===Tipo_Instruccion.DECL_FUNCION){
+            //FunDecExecute(instruccion,TablaSimbolos)
+        }
+        
+    }
+    catch(e){
+        console.error(e)
+    }
+    });
+
+    auxArr.forEach((ins)=>{
+        _.remove(Instrucciones,function(element){
+            return JSON.stringify(ins)===JSON.stringify(element)
+        });
+    });
+
+    console.log(Instrucciones)
+}
+
+/**
+ * Traduce una salida a consola a 3D
+ */
+function ConsoleLogTo3D(instruccion,TS){
+    if(instruccion.Valor.Valor!==undefined){
+        if(instruccion.Valor.Tipo===Tipo_Valor.STRING){
+            Array.from(instruccion.Valor.Valor).forEach(element => {
+                Code+=`printf("%c", (char)${element.charCodeAt(0)});\n`
+            });
+            Code+=`printf("\\n");\n`
+        }
+        else if(instruccion.Valor.Tipo===Tipo_Valor.ID){
+            let auxSimb=TS.getValor(instruccion.Valor.Valor)
+            if(auxSimb.Tipo===Tipo_Valor.STRING){
+                Code+=`auxPtr=stack[(int)${auxSimb.Valor}];\n`
+                Code+='printString();\n'
+            }
+            else if(auxSimb.Tipo===Tipo_Valor.BOOLEAN){
+                Code+=`auxTemp=stack[(int)${auxSimb.Valor}];\n`
+                Code+='printBoolean();\n'
+            }
+            else{
+                Code+=`auxTemp=stack[(int)${auxSimb.Valor}];\n`
+                Code+='printNumber();\n'
+            }
+        }
+        else if(instruccion.Valor.Tipo===Tipo_Valor.BOOLEAN){
+            Code+=`printf("${instruccion.Valor.Valor}");printf("\\n");\n`
+        }
+        else{
+            Code+=`printf("%f", (float)${instruccion.Valor.Valor});printf("\\n");\n`
+        }
+    }
+}
+
+//DECLARACIONES Y ASIGNACIONES
+
+/**
+ * Traduce una declaracion LET a 3D
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
@@ -188,17 +308,89 @@ function LetDecTo3D (instruccion,TS){
         Code+= `//Comienza declaracion de ${element.ID}\n`
         if(element.Valor!==null){
             TS.nuevoSimbolo(element.ID,element.Tipo,"LET",PunteroP,element.Valor.Tipo); 
-            aux=traducirValor(element.Valor,TS)      
-            Code+= `stack[(int)p] = ${aux};\np=p+1;\n`
+            aux=traducirValor(element.Valor,TS)   
+            if(Array.isArray(aux)){   
+                let auxArr=[]
+                aux.forEach((element)=>{
+                    auxArr.push(PunteroP)
+                    Code+= `stack[(int)p] = ${element};\np=p+1;\n`
+                    PunteroP++
+                });
+                TS.actualizar(element.ID,auxArr)
+            }
+            else{
+                Code+= `stack[(int)p] = ${aux};\np=p+1;\n`
+                PunteroP++
+            } 
         }
         else{
             TS.nuevoSimbolo(element.ID,element.Tipo,"LET",PunteroP,undefined); 
+            PunteroP++
         }
-        PunteroP++
         Code+= `//Termina declaracion de ${element.ID}\n`
     });
 
 }
+
+/**
+ * Traduce una declaracion CONST a 3D
+ * @param {*} Instruccion Bloque que contiene la instruccion   
+ * @param {TablaSimbolos} TS Tabla de Simbolos
+ */
+function ConstDecTo3D (instruccion,TS){
+    let aux; 
+
+    instruccion.ID.forEach((element) => {
+        Code+= `//Comienza declaracion de ${element.ID}\n`
+        if(element.Valor!==null){
+            TS.nuevoSimbolo(element.ID,element.Tipo,"CONST",PunteroP,element.Valor.Tipo); 
+            aux=traducirValor(element.Valor,TS)   
+            if(Array.isArray(aux)){   
+                let auxArr=[]
+                aux.forEach((element)=>{
+                    auxArr.push(PunteroP)
+                    Code+= `stack[(int)p] = ${element};\np=p+1;\n`
+                    PunteroP++
+                });
+                TS.actualizar(element.ID,auxArr)
+            }
+            else{
+                Code+= `stack[(int)p] = ${aux};\np=p+1;\n`
+                PunteroP++
+                if(element.Tipo===Tipo_Valor.BOOLEAN||element.Tipo===Tipo_Valor.NUMBER){
+                    TS.actualizar(element.ID,aux)
+                }
+            } 
+        }
+        else{
+            TS.nuevoSimbolo(element.ID,element.Tipo,"CONST",PunteroP,undefined); 
+            PunteroP++
+        }
+        Code+= `//Termina declaracion de ${element.ID}\n`
+    });
+
+}
+
+/**
+ * Ejecuta la declaracion de un type
+ * @param {*} instruccion 
+ * @param {*} ts 
+ */
+function TypeDecExecute(instruccion,TS){
+    //Se declara Type
+    TS.nuevoSimbolo(instruccion.ID,undefined,"TYPE",instruccion.Attrib)
+}
+
+/**
+ * Ejecuta una sentencia de asignacion
+ * @param {*} instruccion 
+ * @param {*} ts 
+ */
+function AsigTo3D(instruccion,ts){
+    
+}
+
+// CONTROL DE FLUJO
 
 /**
  * Traduce un bloque If-Else a 3D
@@ -233,6 +425,8 @@ function IfTo3D (instruccion,TS){
     Code+=`${EtiquetaNext}:\n`
     
 }
+
+// CICLOS
 
 /**
  * Traduce un bloque While a 3D
@@ -319,14 +513,34 @@ function ForTo3D(instruccion,TS){
  * @param {*} tabla de simbolos
  */
 function traducirValor(valor,ts){
+    //VALOR PUNTUALES Y UNITARIOS 
     if(valor.Valor!==undefined){
         if(valor.Tipo===Tipo_Valor.STRING){
             let aux = PunteroH
             traducirString(valor.Valor)
             return aux
         }
+        else if(valor.Tipo===Tipo_Valor.BOOLEAN){
+            if(valor.Valor){
+                return 1
+            }
+            else{
+                return 0
+            }
+        }
+        else if(valor.Tipo===Tipo_Valor.ID){
+            let auxSimb=ts.getValor(valor.Valor)
+            if(auxSimb.Tipo===Tipo_Valor.STRING){
+                Code+= generarTemporal()+`=stack[(int)${auxSimb.Valor}];\n`
+                return getLastTemporal()
+            }
+            else{
+                Code+= generarTemporal()+`=stack[(int)${auxSimb.Valor}];\n`
+                return getLastTemporal()
+            }
+        }
         else{
-            return valor.Valor;
+            return valor.Valor
         }
     }
     else if(Array.isArray(valor)){
@@ -335,12 +549,10 @@ function traducirValor(valor,ts){
             //return "[]"
         }
         else if(valor[0].ID===undefined){
-            //return traducirArray(valor);
+            return traducirArray(valor)
         }
-        else{
-            let aux=PunteroH
-            traducirType(valor,ts)
-            return aux
+        else{            
+            return traducirType(valor,ts)
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
@@ -353,7 +565,7 @@ function traducirValor(valor,ts){
         return traducirOperacionBinaria(valor,ts);
     }
     else{
-        return valor;
+
     }
 }
 
@@ -364,10 +576,12 @@ function traducirValor(valor,ts){
  * @param {*} txt String donde concatenara
  */
 function traducirOperacionBinaria(valor,ts){
-    let OpIzq=traducirValor(valor.OpIzq)
+
+
+    let OpIzq=traducirValor(valor.OpIzq,ts)
     let OpDer
     if(valor.OpDer!==undefined){
-    OpDer=traducirValor(valor.OpDer)
+    OpDer=traducirValor(valor.OpDer,ts)
     }
     
     switch(valor.OpTipo){
@@ -390,7 +604,11 @@ function traducirOperacionBinaria(valor,ts){
             Code+= generarTemporal()+"="+OpIzq+"%"+OpDer+";\n"
             return getLastTemporal()
         case Tipo_Operacion.POTENCIA:
-            return //"("+traducirValor(valor.OpIzq)+"**"+traducirValor(valor.OpDer)+")"
+            Code+= `auxNum1=${OpIzq};\n`
+            Code+= `auxNum2=${OpDer};\n`
+            Code+= `potencia();\n`
+            Code+= generarTemporal()+"=auxNum3;\n"
+            return getLastTemporal()
         case Tipo_Operacion.DECREMENTO:
             Code+= generarTemporal()+"="+OpIzq+"-1;\n"
             return getLastTemporal()
@@ -437,20 +655,43 @@ function traducirOperacionBinaria(valor,ts){
  * @param {*} valor Valor del type a traducir
  * @param {*} id Identificador de type
  */
-function traducirType(valor,ts,id){
-    let aux
+function traducirType(valor,ts){
+    let auxArr = []
+    let aux 
     Array.from(valor).forEach(element => {
-        aux = traducirValor(element.Valor)
-        Code+= `heap[(int)h] = ${aux};\nh=h+1;\n`
-        PunteroH++;
+        auxArr.push(PunteroH)
+        aux = traducirValor(element.Valor,ts)
+        if(Array.isArray(aux)){   
+            auxArr.pop()
+            auxArr.push(aux)
+        }
+        else if(element.Valor.Tipo!==Tipo_Valor.STRING){
+            Code+= `heap[(int)h] = ${aux};\nh=h+1;\n`
+            PunteroH++;
+        } 
     });
+    return auxArr
 }
 
 /**
  * Traducir un array a 3D
  */
-function traducirArray(){
-
+function traducirArray(valor,ts){
+    let auxArr = []
+    let aux 
+    valor.forEach(element => {
+        auxArr.push(PunteroH)
+        aux = traducirValor(element.Valor,ts)
+        if(Array.isArray(aux)){
+            auxArr.pop()
+            auxArr.push(aux)
+        }
+        else if(element.Valor.Tipo!==Tipo_Valor.STRING){
+            Code+= `heap[(int)h] = ${aux};\nh=h+1;\n`
+            PunteroH++;
+        }    
+    });
+    return auxArr
 }
 
 /**
@@ -466,12 +707,17 @@ function traducirString(valor){
     PunteroH++;
 }
 
+/**
+ * Separa una suma en sus operandos
+ * Esta funcion se usa para las salidas de consola
+ */
+function flatSuma(suma){
 
 
+}
 
 
 // FUNCIONES GENERADORAS 
-
 
 /**
  * Generar un nuevo string para un temporal
@@ -499,12 +745,84 @@ function generarEtiqueta(){
  */
 function generarEncabezado(){
 
-    let TempTxt = "#include <stdio.h>\nfloat heap[16384];\nfloat stack[16394];\nfloat p=0;\nfloat h=0;\n"
-    TempTxt+="float "
-    for(let i=0;i<ContadorT;i++){
-        TempTxt+= i+1===ContadorT ? "t"+i+";" : "t"+i+","
+    let TempTxt = `#include <stdio.h>
+float heap[16384];
+float stack[16394];
+float p=0;
+float h=0;
+float auxPtr,auxTemp; 
+int auxNum1,auxNum2,auxNum3,auxNum4; 
+void printString();
+void printNumber();
+void printBoolean();
+void potencia();
+`
+    if(ContadorT>0){
+        TempTxt+="float ";
+        for(let i=0;i<ContadorT;i++){
+            TempTxt+= i+1===ContadorT ? "t"+i+";" : "t"+i+","
+        }
     }
-    TempTxt += "\nvoid main() {\n"+ Code + "return; \n}"
+    TempTxt += `
+void main(){
+
+${Code}
+return;
+}`
+
+    TempTxt += `
+    
+void printString(){
+
+    S0:
+        auxTemp=heap[(int)auxPtr];
+        if(auxTemp!=-1) goto S1;
+        goto S2;
+    
+    S1:
+        printf("%c", (char)auxTemp);
+        auxPtr=auxPtr+1;
+        goto S0;
+    S2:
+        printf("\\n");
+        return ;
+
+}
+void printNumber(){
+
+    printf("%f", (float)auxTemp);
+    printf("\\n");
+    return ;
+}
+void printBoolean(){
+
+    if(auxTemp==0) goto R0;
+    goto R1;
+    R0:
+    printf("false \\n");
+    goto R2;
+    R1:
+    printf("true \\n");
+    R2:
+    return ;
+}
+void potencia(){
+
+    auxNum4=1;
+    auxNum3=auxNum1;
+    R0:
+    if(auxNum4<auxNum2) goto R1;
+    goto R2;
+    
+    R1:
+    auxNum3 = auxNum3*auxNum1;
+    auxNum4 = auxNum4+1;
+    goto R0;
+    
+    R2:
+    return ;
+}
+`
 
     return TempTxt
 
