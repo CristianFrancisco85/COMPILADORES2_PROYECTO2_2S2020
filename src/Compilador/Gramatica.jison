@@ -194,16 +194,34 @@ listaID
     //SIN VALOR
     :listaID COMA ID DOSPUNTOS tipo     
     {
-        if($5===Tipo_Valor.NUMBER){defaultVal=0}
-        if($5===Tipo_Valor.BOOLEAN){defaultVal=false}
-        else{defaultVal=null}
+        if($5===Tipo_Valor.NUMBER){defaultVal={
+            Valor: 0,
+            Tipo:Tipo_Valor.NUMBER
+          }}
+        else if($5===Tipo_Valor.BOOLEAN){defaultVal={
+            Valor: false,
+            Tipo:Tipo_Valor.BOOLEAN
+          }}
+        else{defaultVal=defaultVal={
+            Valor: null,
+            Tipo:Tipo_Valor.NULL
+          }}
         $1.push(AST_Tools.newID($3,$5,defaultVal));
     }                                              
     |ID DOSPUNTOS tipo                 
     {
-        if($3===Tipo_Valor.NUMBER){defaultVal=0}
-        if($3===Tipo_Valor.BOOLEAN){defaultVal=false}
-        else{defaultVal=null}
+        if($3===Tipo_Valor.NUMBER){defaultVal={
+            Valor: 0,
+            Tipo:Tipo_Valor.NUMBER
+          }}
+        else if($3===Tipo_Valor.BOOLEAN){defaultVal={
+            Valor: false,
+            Tipo:Tipo_Valor.BOOLEAN
+          }}
+        else{defaultVal=defaultVal=defaultVal={
+            Valor: null,
+            Tipo:Tipo_Valor.NULL
+          }}
         $$=AST_Tools.newIDList($1,$3,defaultVal);
     }      
     //CON VALOR

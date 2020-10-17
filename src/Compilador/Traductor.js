@@ -7,7 +7,7 @@ const _ = require('lodash')
 
 //AST modificado que se regresara si hay funciones anidadas
 let AST,Code;
-let PunteroH,PunteroP
+let PunteroP
 let ContadorT,ContadorL
 
 /**
@@ -52,7 +52,7 @@ class TablaSimbolos {
             return simb.ID===id;
         });
         if(simbolo.length===0){
-            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo){
+            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL){
                 this.simbolos.push(crearSimbolo(id,tipo,valor,rol));
             }
             else{
@@ -117,8 +117,6 @@ class TablaSimbolos {
 export function Traducir (Instrucciones){
     let GlobalTS = new TablaSimbolos([])
     Code="";
-    PunteroH=0
-    PunteroP=0
     ContadorT=0
     ContadorL=0
     AST=JSON.parse(JSON.stringify(Instrucciones))
@@ -152,7 +150,7 @@ function TraducirBloque(Instrucciones,TS){
                 TypeDecExecute(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.ASIGNACION){
-
+                AsigTo3D(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.MAS_ASIGNACION){
 
@@ -196,9 +194,6 @@ function TraducirBloque(Instrucciones,TS){
             else if(instruccion.Tipo===Tipo_Instruccion.DECL_FUNCION){
                 
             }
-            else if(instruccion.Tipo===Tipo_Instruccion.GRAFICAR){
-
-            }
             else if(instruccion.Tipo===Tipo_Instruccion.CONTINUE){
                 
             }
@@ -207,6 +202,9 @@ function TraducirBloque(Instrucciones,TS){
             }
             else if(instruccion.Tipo===Tipo_Instruccion.RETURN){
                 
+            }
+            else if(instruccion.OpTipo===Tipo_Operacion.DECREMENTO||instruccion.OpTipo===Tipo_Operacion.INCREMENTO){
+                IncDecTo3D(instruccion,TS)
             }
             else{
                 
@@ -255,8 +253,6 @@ function BuscarDec(Instrucciones,TablaSimbolos){
             return JSON.stringify(ins)===JSON.stringify(element)
         });
     });
-
-    console.log(Instrucciones)
 }
 
 /**
@@ -273,7 +269,7 @@ function ConsoleLogTo3D(instruccion,TS){
         else if(instruccion.Valor.Tipo===Tipo_Valor.ID){
             let auxSimb=TS.getValor(instruccion.Valor.Valor)
             if(auxSimb.Tipo===Tipo_Valor.STRING){
-                Code+=`auxPtr=stack[(int)${auxSimb.Valor}];\n`
+                Code+=`auxPtr=${auxSimb.Valor};\n`
                 Code+='printString();\n'
             }
             else if(auxSimb.Tipo===Tipo_Valor.BOOLEAN){
@@ -292,6 +288,9 @@ function ConsoleLogTo3D(instruccion,TS){
             Code+=`printf("%f", (float)${instruccion.Valor.Valor});printf("\\n");\n`
         }
     }
+    else{
+
+    }
 }
 
 //DECLARACIONES Y ASIGNACIONES
@@ -305,27 +304,14 @@ function LetDecTo3D (instruccion,TS){
     let aux; 
 
     instruccion.ID.forEach((element) => {
-        Code+= `//Comienza declaracion de ${element.ID}\n`
-        if(element.Valor!==null){
-            TS.nuevoSimbolo(element.ID,element.Tipo,"LET",PunteroP,element.Valor.Tipo); 
-            aux=traducirValor(element.Valor,TS)   
-            if(Array.isArray(aux)){   
-                let auxArr=[]
-                aux.forEach((element)=>{
-                    auxArr.push(PunteroP)
-                    Code+= `stack[(int)p] = ${element};\np=p+1;\n`
-                    PunteroP++
-                });
-                TS.actualizar(element.ID,auxArr)
-            }
-            else{
-                Code+= `stack[(int)p] = ${aux};\np=p+1;\n`
-                PunteroP++
-            } 
-        }
+        Code+= `//Comienza declaracion de ${element.ID}\n`  
+        if(element.Valor.Tipo!==Tipo_Valor.NULL){   
+            aux=traducirValor(element.Valor,TS)
+            TS.nuevoSimbolo(element.ID,element.Tipo,"LET",aux.Valor,element.Valor.Tipo);
+        }   
         else{
-            TS.nuevoSimbolo(element.ID,element.Tipo,"LET",PunteroP,undefined); 
-            PunteroP++
+            // FALTA CONTROLAR NULLS
+            console.log("dw")
         }
         Code+= `//Termina declaracion de ${element.ID}\n`
     });
@@ -386,8 +372,40 @@ function TypeDecExecute(instruccion,TS){
  * @param {*} instruccion 
  * @param {*} ts 
  */
-function AsigTo3D(instruccion,ts){
+function AsigTo3D(instruccion,TS){
+    Code+= `//Comienza asignacion de ${instruccion.ID}\n`
+    //Se obtiene variable
+    let auxSimb=TS.getValor(instruccion.ID)
+    let aux=getValor(instruccion.Valor,TS)
+    //Si es un array o type se pasa por referencia
+    if(Array.isArray(aux.Valor)){
+        TS.actualizar(instruccion.ID,aux.Valor)
+    }
+    //Si no se pasa por valor
+    else{
+        if(auxSimb.Tipo===Tipo_Valor.STRING){
+            Code+= `${auxSimb.Valor}=${aux.Valor};\n` 
+        }     
+        Code+= `stack[(int)${auxSimb.Valor}]=${aux.Valor};\n` 
+    }
+    Code+= `//Termina asignacion de ${instruccion.ID}\n`
     
+}
+/**
+ * Traduce un operacion de incremento o decremento
+ * @param {*} instruccion 
+ * @param {*} TS 
+ */
+function IncDecTo3D(instruccion,TS){
+    let auxSimb = TS.getValor(instruccion.OpIzq.Valor)
+    if(instruccion.OpTipo===Tipo_Operacion.INCREMENTO){
+        Code+=`${generarTemporal()}=stack[(int)${auxSimb.Valor}];\n`
+        Code+=`stack[(int)${auxSimb.Valor}]=${getLastTemporal()}+1;\n`
+    }
+    else{
+        Code+=`${generarTemporal()}=stack[(int)${auxSimb.Valor}];\n`
+        Code+=`stack[(int)${auxSimb.Valor}]=${getLastTemporal()}-1;\n`
+    }
 }
 
 // CONTROL DE FLUJO
@@ -398,16 +416,15 @@ function AsigTo3D(instruccion,ts){
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
 function IfTo3D (instruccion,TS){
-
+    console.log(instruccion)
     let newTS = new TablaSimbolos(TS.simbolos)
-
-    let aux = traducirValor(instruccion.ExpresionLogica)
+    let aux = getValor(instruccion.ExpresionLogica,TS)
     let EtiquetaTrue=generarEtiqueta()
     let EtiquetaFalse=generarEtiqueta();
     let EtiquetaNext=generarEtiqueta()
 
     Code+="//Comienza traduccion de IF \n"
-    Code+= `if (${aux}) goto ${EtiquetaTrue};\n`
+    Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
     Code+= `goto ${EtiquetaFalse};\n`
 
     Code+=`${EtiquetaTrue}:\n`
@@ -442,13 +459,13 @@ function WhileTo3D(instruccion,TS){
 
     Code+="//Comienza traduccion de While\n"
     Code+=`${EtiquetaBegin}:\n`
-    let aux = traducirValor(instruccion.ExpresionLogica)
-    Code+= `if (${aux}) goto ${EtiquetaTrue};\n`
+    let aux = getValor(instruccion.ExpresionLogica,TS)
+    Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
     Code+= `goto ${EtiquetaNext};\n`
 
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS):TraducirBloque([instruccion.Instrucciones],newTS)
-    Code+=`goto ${EtiquetaNext};\n`
+    Code+=`goto ${EtiquetaBegin};\n`
 
     Code+="//Termina traduccion de While\n"
 
@@ -471,8 +488,8 @@ function DoWhileTo3D(instruccion,TS){
     Code+=`${EtiquetaBegin}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS):TraducirBloque([instruccion.Instrucciones],newTS)
 
-    let aux = traducirValor(instruccion.ExpresionLogica)
-    Code+= `if (${aux}) goto ${EtiquetaBegin};\n`
+    let aux = getValor(instruccion.ExpresionLogica,TS)
+    Code+= `if (${aux.Valor}) goto ${EtiquetaBegin};\n`
     Code+= `goto ${EtiquetaNext};\n`
     Code+="//Termina traduccion de Do-While\n"
 
@@ -494,12 +511,12 @@ function ForTo3D(instruccion,TS){
     Code+="//Comienza traduccion de For\n"
     Array.isArray(instruccion.OperacionInicial)?TraducirBloque(instruccion.OperacionInicial,newTS):TraducirBloque([instruccion.OperacionInicial],newTS)
     Code+=`${EtiquetaBegin}:\n`
-    let aux = traducirValor(instruccion.ExpresionLogica)
-    Code+= `if (${aux}) goto ${EtiquetaTrue};\n`
-    Code+=`${EtiquetaNext}:\n`
+    let aux = getValor(instruccion.ExpresionLogica,newTS)
+    Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
+    Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS):TraducirBloque([instruccion.Instrucciones],newTS) 
     Code+= `goto ${EtiquetaBegin};\n`
-    Code+="//Termina traduccion de Do-While\n"
+    Code+="//Termina traduccion de For\n"
     Code+=`${EtiquetaNext}:\n`
 
 }
@@ -508,39 +525,133 @@ function ForTo3D(instruccion,TS){
 //FUNCIONES COMPLEMENTARIAS PARA TRADUCIR A 3D
 
 /**
- * Traduce un expresion
+ * Traduce un expresion, se usa para declaraciones y expresiones
  * @param {*} valor Expresion a traducir
  * @param {*} tabla de simbolos
+ * @param {*} bool Indica si se va usar el heap 
+ * @returns {*} Objeto {Valor:...,Tipo...}
  */
-function traducirValor(valor,ts){
+function traducirValor(valor,ts,bool){
     //VALOR PUNTUALES Y UNITARIOS 
+    
     if(valor.Valor!==undefined){
         if(valor.Tipo===Tipo_Valor.STRING){
-            let aux = PunteroH
-            traducirString(valor.Valor)
-            return aux
+            return traducirString(valor.Valor)
         }
         else if(valor.Tipo===Tipo_Valor.BOOLEAN){
             if(valor.Valor){
-                return 1
+                if(bool){
+                Code+=generarTemporal()+"=p;\n"
+                Code+= `stack[(int)p] = ${1};\np=p+1;\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+                }
+                else{
+                    Code+=generarTemporal()+"=h;\n"
+                    Code+= `heap[(int)h] = ${1};\nh=h+1;\n`
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN} 
+                }
             }
             else{
-                return 0
+                if(bool){
+                Code+=generarTemporal()+"=p;\n"
+                Code+= `stack[(int)p] = ${0};\np=p+1;\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+                }
+                else{
+                    Code+=generarTemporal()+"=h;\n"
+                    Code+= `heap[(int)h] = ${0};\nh=h+1;\n`
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN} 
+                }
             }
         }
         else if(valor.Tipo===Tipo_Valor.ID){
             let auxSimb=ts.getValor(valor.Valor)
             if(auxSimb.Tipo===Tipo_Valor.STRING){
-                Code+= generarTemporal()+`=stack[(int)${auxSimb.Valor}];\n`
-                return getLastTemporal()
+                Code+=generarTemporal()+"=p;\n"
+                Code+= `stack[(int)p] = ${auxSimb.Valor};\np=p+1;\n`
+                return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
             }
+            //FALTAN MAS TIPOS
             else{
-                Code+= generarTemporal()+`=stack[(int)${auxSimb.Valor}];\n`
-                return getLastTemporal()
+                Code+=generarTemporal()+"=p;\n"
+                Code+= `stack[(int)p] = ${auxSimb.Valor};\np=p+1;\n`
+                return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
             }
         }
         else{
-            return valor.Valor
+            if(bool){
+                Code+= generarTemporal()+"=h;\n"
+                Code+= `heap[(int)h] = ${valor.Valor};\nh=h+1;\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
+            else{
+                Code+= generarTemporal()+"=p;\n"
+                Code+= `stack[(int)p] = ${valor.Valor};\np=p+1;\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
+        }
+    }
+    else if(Array.isArray(valor)){
+
+        if(valor[0].ID===undefined){
+            return traducirArray(valor)
+        }
+        else{            
+            return traducirType(valor,ts)
+        } 
+    }
+    else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
+        //return CallFunToString(valor);
+    }
+    else if(valor.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
+        //return TernarioToString(valor) 
+    }
+    else if(valor.OpTipo!==undefined){
+        let aux = traducirOperacionBinaria(valor,ts)
+        if(aux.Tipo!==Tipo_Valor.STRING){
+            Code+=generarTemporal()+"=p;\n"
+            Code+= `stack[(int)p] = ${aux.Valor};\np=p+1;\n`
+        }
+        return {Valor:getLastTemporal(),Tipo:aux.Tipo}
+    }
+    else{
+
+    }
+}
+
+/**
+ * Traduce un expresion, se usa para operaciones binarias
+ * @param {*} valor Expresion a traducir
+ * @param {*} tabla de simbolos
+ * @returns {*} Objeto {Valor:...,Tipo...}
+ */
+function getValor(valor,ts){
+    //VALOR PUNTUALES Y UNITARIOS 
+    if(valor.Valor!==undefined){
+        if(valor.Tipo===Tipo_Valor.STRING){
+            return traducirString(valor.Valor)
+        }
+        else if(valor.Tipo===Tipo_Valor.BOOLEAN){
+            if(valor.Valor){
+                return {Valor:1,Tipo:Tipo_Valor.BOOLEAN}
+            }
+            else{
+                return {Valor:0,Tipo:Tipo_Valor.BOOLEAN}
+            }
+        }
+        else if(valor.Tipo===Tipo_Valor.ID){
+            let auxSimb=ts.getValor(valor.Valor)
+            if(auxSimb.Tipo===Tipo_Valor.STRING){
+                Code+= generarTemporal()+`=${auxSimb.Valor};\n`
+                return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
+            }
+            else{
+                Code+= generarTemporal()+`=stack[(int)${auxSimb.Valor}];\n`
+                return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
+            }
+        }
+        else{
+            return {Valor:valor.Valor,Tipo:Tipo_Valor.NUMBER}
         }
     }
     else if(Array.isArray(valor)){
@@ -549,10 +660,10 @@ function traducirValor(valor,ts){
             //return "[]"
         }
         else if(valor[0].ID===undefined){
-            return traducirArray(valor)
+            //return traducirArray(valor)
         }
         else{            
-            return traducirType(valor,ts)
+            //return traducirType(valor,ts)
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
@@ -578,70 +689,90 @@ function traducirValor(valor,ts){
 function traducirOperacionBinaria(valor,ts){
 
 
-    let OpIzq=traducirValor(valor.OpIzq,ts)
+    let OpIzq=getValor(valor.OpIzq,ts)
     let OpDer
     if(valor.OpDer!==undefined){
-    OpDer=traducirValor(valor.OpDer,ts)
+    OpDer=getValor(valor.OpDer,ts)
     }
     
     switch(valor.OpTipo){
         case Tipo_Operacion.NEGACION:
-            Code+= generarTemporal()+"= -"+OpIzq+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"= -"+OpIzq.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MULTIPLICACION:
-            Code+= generarTemporal()+"="+OpIzq+"*"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"*"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.DIVISION:
-            Code+= generarTemporal()+"="+OpIzq+"/"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"/"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.SUMA:
-            Code+= generarTemporal()+"="+OpIzq+"+"+OpDer+";\n"
-            return getLastTemporal()
+            //NUMBER-NUMBER
+            if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.NUMBER){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"+"+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
+            //STRING-STRING
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.STRING){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `concatStrings();\n`
+                Code+= generarTemporal()+"=auxNum4;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+            }
+            return
         case Tipo_Operacion.RESTA:
-            Code+= generarTemporal()+"="+OpIzq+"-"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"-"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MODULO:
-            Code+= generarTemporal()+"="+OpIzq+"%"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"%"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.POTENCIA:
-            Code+= `auxNum1=${OpIzq};\n`
-            Code+= `auxNum2=${OpDer};\n`
+            Code+= `auxNum1=${OpIzq.Valor};\n`
+            Code+= `auxNum2=${OpDer.Valor};\n`
             Code+= `potencia();\n`
             Code+= generarTemporal()+"=auxNum3;\n"
-            return getLastTemporal()
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.DECREMENTO:
-            Code+= generarTemporal()+"="+OpIzq+"-1;\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"-1;\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.INCREMENTO:
-            Code+= generarTemporal()+"="+OpIzq+"+1;\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"+1;\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MAYOR_QUE:
-            Code+= generarTemporal()+"="+OpIzq+">"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+">"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MENOR_QUE:
-            Code+= generarTemporal()+"="+OpIzq+"<"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"<"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MAYOR_IGUAL:
-            Code+= generarTemporal()+"="+OpIzq+">="+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+">="+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MENOR_IGUAL:
-            Code+= generarTemporal()+"="+OpIzq+"<="+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"<="+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.DOBLE_IGUAL:
-            Code+= generarTemporal()+"="+OpIzq+"=="+OpDer+";\n"
+            //NUMBER-NUMBER
+            if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.NUMBER){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"=="+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
             return getLastTemporal()
         case Tipo_Operacion.NO_IGUAL:
-            Code+= generarTemporal()+"="+OpIzq+"!="+OpDer+";\n"
+            //NUMBER-NUMBER
+            if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.NUMBER){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"!="+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
             return getLastTemporal()
         case Tipo_Operacion.AND:
-            Code+= generarTemporal()+"="+OpIzq+"&&"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"&&"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
         case Tipo_Operacion.OR:
-            Code+= generarTemporal()+"="+OpIzq+"||"+OpDer+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"="+OpIzq.Valor+"||"+OpDer.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
         case Tipo_Operacion.NOT:
-            Code+= generarTemporal()+"= !"+OpIzq+";\n"
-            return getLastTemporal()
+            Code+= generarTemporal()+"= !"+OpIzq.Valor+";\n"
+            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
         case Tipo_Operacion.ATRIBUTO:
             return //traducirValor(valor.OpIzq)+"."+traducirValor(valor.OpDer)
         case Tipo_Operacion.ACCESO_ARR:
@@ -658,19 +789,11 @@ function traducirOperacionBinaria(valor,ts){
 function traducirType(valor,ts){
     let auxArr = []
     let aux 
-    Array.from(valor).forEach(element => {
-        auxArr.push(PunteroH)
+    valor.forEach(element => {      
         aux = traducirValor(element.Valor,ts)
-        if(Array.isArray(aux)){   
-            auxArr.pop()
-            auxArr.push(aux)
-        }
-        else if(element.Valor.Tipo!==Tipo_Valor.STRING){
-            Code+= `heap[(int)h] = ${aux};\nh=h+1;\n`
-            PunteroH++;
-        } 
+        auxArr.push(aux.Valor)    
     });
-    return auxArr
+    return {Valor:auxArr,Tipo:"TYPE"}
 }
 
 /**
@@ -679,19 +802,11 @@ function traducirType(valor,ts){
 function traducirArray(valor,ts){
     let auxArr = []
     let aux 
-    valor.forEach(element => {
-        auxArr.push(PunteroH)
+    valor.forEach(element => {      
         aux = traducirValor(element.Valor,ts)
-        if(Array.isArray(aux)){
-            auxArr.pop()
-            auxArr.push(aux)
-        }
-        else if(element.Valor.Tipo!==Tipo_Valor.STRING){
-            Code+= `heap[(int)h] = ${aux};\nh=h+1;\n`
-            PunteroH++;
-        }    
+        auxArr.push(aux.Valor)    
     });
-    return auxArr
+    return {Valor:auxArr,Tipo:"ARR"}
 }
 
 /**
@@ -699,12 +814,12 @@ function traducirArray(valor,ts){
  * @param {*} valor Valor del string a traducir
  */
 function traducirString(valor){
+    Code+= generarTemporal()+"=h;\n"
     Array.from(valor).forEach(element => {
         Code+= `heap[(int)h] = ${element.charCodeAt(0)};\nh=h+1;\n`
-        PunteroH++;
     });
     Code+= `heap[(int)h] = -1;\nh=h+1;\n`
-    PunteroH++;
+    return{Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
 }
 
 /**
@@ -725,6 +840,7 @@ function flatSuma(suma){
 function generarTemporal(){
     return "t"+ContadorT++
 }
+
 /**
  * Obtiene la ultima etiqueta generada
  */
@@ -756,6 +872,7 @@ void printString();
 void printNumber();
 void printBoolean();
 void potencia();
+void concatStrings();
 `
     if(ContadorT>0){
         TempTxt+="float ";
@@ -821,6 +938,35 @@ void potencia(){
     
     R2:
     return ;
+}
+void concatStrings(){
+    auxNum4=h;
+    
+    L0:
+    auxNum3=heap[(int)auxNum1];
+    if(auxNum3!=-1)goto L1;
+    goto L2;
+    L1: 
+    heap[(int)h]=auxNum3;
+    h=h+1;
+    auxNum1=auxNum1+1;
+    goto L0;
+    
+    L2:
+    auxNum3=heap[(int)auxNum2];
+    if(auxNum3!=-1)goto L3;
+    goto L4;
+    L3: 
+    heap[(int)h]=auxNum3;
+    h=h+1;
+    auxNum2=auxNum2+1;
+    goto L2;
+    
+    L4:
+    heap[(int)h]=-1;
+    h=h+1;
+    return;
+
 }
 `
 

@@ -184,17 +184,35 @@ this.$=($$[$0-4]+"_ARR_ARR")
 break;
 case 51:
 
-        if($$[$0]===Tipo_Valor.NUMBER){defaultVal=0}
-        if($$[$0]===Tipo_Valor.BOOLEAN){defaultVal=false}
-        else{defaultVal=null}
+        if($$[$0]===Tipo_Valor.NUMBER){defaultVal={
+            Valor: 0,
+            Tipo:Tipo_Valor.NUMBER
+          }}
+        else if($$[$0]===Tipo_Valor.BOOLEAN){defaultVal={
+            Valor: false,
+            Tipo:Tipo_Valor.BOOLEAN
+          }}
+        else{defaultVal=defaultVal={
+            Valor: null,
+            Tipo:Tipo_Valor.NULL
+          }}
         $$[$0-4].push(AST_Tools.newID($$[$0-2],$$[$0],defaultVal));
     
 break;
 case 52:
 
-        if($$[$0]===Tipo_Valor.NUMBER){defaultVal=0}
-        if($$[$0]===Tipo_Valor.BOOLEAN){defaultVal=false}
-        else{defaultVal=null}
+        if($$[$0]===Tipo_Valor.NUMBER){defaultVal={
+            Valor: 0,
+            Tipo:Tipo_Valor.NUMBER
+          }}
+        else if($$[$0]===Tipo_Valor.BOOLEAN){defaultVal={
+            Valor: false,
+            Tipo:Tipo_Valor.BOOLEAN
+          }}
+        else{defaultVal=defaultVal=defaultVal={
+            Valor: null,
+            Tipo:Tipo_Valor.NULL
+          }}
         this.$=AST_Tools.newIDList($$[$0-2],$$[$0],defaultVal);
     
 break;
