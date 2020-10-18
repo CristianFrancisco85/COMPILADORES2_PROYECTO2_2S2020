@@ -8,7 +8,7 @@ const _ = require('lodash')
 //AST modificado que se regresara si hay funciones anidadas
 let AST,Code;
 let PunteroP
-let ContadorT,ContadorL
+let ContadorT,ContadorL,ContadorA
 
 /**
  * Crea un símbolo
@@ -119,8 +119,9 @@ export function Traducir (Instrucciones){
     Code="";
     ContadorT=0
     ContadorL=0
+    ContadorA=0;
     AST=JSON.parse(JSON.stringify(Instrucciones))
-    BuscarDec(AST,GlobalTS)
+    //BuscarDec(AST,GlobalTS)
     TraducirBloque(AST,GlobalTS)
     console.log(GlobalTS)
     return generarEncabezado()
@@ -289,7 +290,9 @@ function ConsoleLogTo3D(instruccion,TS){
         }
     }
     else{
-
+        let aux = getValor(instruccion.Valor,TS)
+        Code+=`auxPtr=${aux.Valor};\n`
+        Code+='printString();\n'
     }
 }
 
@@ -513,8 +516,10 @@ function ForTo3D(instruccion,TS){
     Code+=`${EtiquetaBegin}:\n`
     let aux = getValor(instruccion.ExpresionLogica,newTS)
     Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
+    Code+= `goto ${EtiquetaNext};\n`
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS):TraducirBloque([instruccion.Instrucciones],newTS) 
+    Array.isArray(instruccion.ExpresionPaso)?TraducirBloque(instruccion.ExpresionPaso,newTS):TraducirBloque([instruccion.ExpresionPaso],newTS) 
     Code+= `goto ${EtiquetaBegin};\n`
     Code+="//Termina traduccion de For\n"
     Code+=`${EtiquetaNext}:\n`
@@ -565,7 +570,7 @@ function traducirValor(valor,ts,bool){
             }
         }
         else if(valor.Tipo===Tipo_Valor.ID){
-            let auxSimb=ts.getValor(valor.Valor)
+            let auxSimb=getValor(valor,ts)
             if(auxSimb.Tipo===Tipo_Valor.STRING){
                 Code+=generarTemporal()+"=p;\n"
                 Code+= `stack[(int)p] = ${auxSimb.Valor};\np=p+1;\n`
@@ -719,6 +724,8 @@ function traducirOperacionBinaria(valor,ts){
                 Code+= generarTemporal()+"=auxNum4;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
             }
+            //STRING-NUMBER
+            //STRING-BOOLEAN
             return
         case Tipo_Operacion.RESTA:
             Code+= generarTemporal()+"="+OpIzq.Valor+"-"+OpDer.Valor+";\n"
@@ -776,7 +783,21 @@ function traducirOperacionBinaria(valor,ts){
         case Tipo_Operacion.ATRIBUTO:
             return //traducirValor(valor.OpIzq)+"."+traducirValor(valor.OpDer)
         case Tipo_Operacion.ACCESO_ARR:
-            return //traducirValor(valor.OpIzq)+"["+traducirValor(valor.OpDer)+"]"
+            OpIzq=ts.getValor(valor.OpIzq)
+            Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
+            OpIzq.Valor.forEach((element,index) => {
+                Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
+            });
+            if(OpIzq.Tipo.includes("NUMBER")||OpIzq.Tipo.includes("BOOLEAN")){
+                Code+=generarTemporal()+`=${getLastTemporalArr()}[${OpDer.Valor}];\n`
+                Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
+            }
+            else{
+                Code+=generarTemporal()+`=${getLastTemporalArr()}[${OpDer.Valor}];\n`
+            }
+            
+            return {Valor:getLastTemporal(),Tipo:OpIzq.Tipo.replaceAll("_ARR","")}
+            
         default:
     }
 }
@@ -803,7 +824,7 @@ function traducirArray(valor,ts){
     let auxArr = []
     let aux 
     valor.forEach(element => {      
-        aux = traducirValor(element.Valor,ts)
+        aux = traducirValor(element.Valor,ts,true)
         auxArr.push(aux.Valor)    
     });
     return {Valor:auxArr,Tipo:"ARR"}
@@ -822,14 +843,6 @@ function traducirString(valor){
     return{Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
 }
 
-/**
- * Separa una suma en sus operandos
- * Esta funcion se usa para las salidas de consola
- */
-function flatSuma(suma){
-
-
-}
 
 
 // FUNCIONES GENERADORAS 
@@ -840,12 +853,24 @@ function flatSuma(suma){
 function generarTemporal(){
     return "t"+ContadorT++
 }
+/**
+ * Generar un nuevo string para un temporal
+ */
+function generarTemporalArr(){
+    return "a"+ContadorA++
+}
 
 /**
  * Obtiene la ultima etiqueta generada
  */
 function getLastTemporal(){
     return "t"+(ContadorT-1)
+}
+/**
+ * Obtiene la ultima etiqueta generada
+ */
+function getLastTemporalArr(){
+    return "a"+(ContadorA-1)
 }
 
 /**
@@ -862,6 +887,7 @@ function generarEtiqueta(){
 function generarEncabezado(){
 
     let TempTxt = `#include <stdio.h>
+#include <stdlib.h>
 float heap[16384];
 float stack[16394];
 float p=0;
@@ -877,7 +903,13 @@ void concatStrings();
     if(ContadorT>0){
         TempTxt+="float ";
         for(let i=0;i<ContadorT;i++){
-            TempTxt+= i+1===ContadorT ? "t"+i+";" : "t"+i+","
+            TempTxt+= i+1===ContadorT ? "t"+i+";\n" : "t"+i+","
+        }
+    }
+    if(ContadorA>0){
+        TempTxt+="float ";
+        for(let i=0;i<ContadorA;i++){
+            TempTxt+= i+1===ContadorA ? "*a"+i+";\n" : "*a"+i+","
         }
     }
     TempTxt += `
