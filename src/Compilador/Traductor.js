@@ -833,6 +833,13 @@ function traducirOperacionBinaria(valor,ts){
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
             }
             //STRING-NUMBER
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.NUMBER){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `concatStringNumber();\n`
+                Code+= generarTemporal()+"=auxNum4;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+            }
 
             //STRING-BOOLEAN
             return
@@ -870,14 +877,40 @@ function traducirOperacionBinaria(valor,ts){
             //NUMBER-NUMBER
             if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.NUMBER){
                 Code+= generarTemporal()+"="+OpIzq.Valor+"=="+OpDer.Valor+";\n"
-                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //BOOLEAN-BOOLEAN
+            if(OpIzq.Tipo===Tipo_Valor.BOOLEAN && OpDer.Tipo===Tipo_Valor.BOOLEAN){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"=="+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //STRING-STRING
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.STRING){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `compareStrings();\n`
+                Code+= generarTemporal()+"=auxNum5;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
             return getLastTemporal()
         case Tipo_Operacion.NO_IGUAL:
             //NUMBER-NUMBER
             if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.NUMBER){
                 Code+= generarTemporal()+"="+OpIzq.Valor+"!="+OpDer.Valor+";\n"
-                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //BOOLEAN-BOOLEAN
+            if(OpIzq.Tipo===Tipo_Valor.BOOLEAN && OpDer.Tipo===Tipo_Valor.BOOLEAN){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"!="+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //STRING-STRING
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.STRING){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `compareStrings();\n`
+                Code+= generarTemporal()+"=!auxNum5;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
             return getLastTemporal()
         case Tipo_Operacion.AND:
@@ -892,7 +925,7 @@ function traducirOperacionBinaria(valor,ts){
         case Tipo_Operacion.ATRIBUTO:
             OpIzq=ts.getValor(valor.OpIzq)
             OpDer=valor.OpDer
-            if(OpDer!=="length"){
+            if(OpDer!=="length"&&OpDer.Tipo!==Tipo_Instruccion.LLAMADA_FUNCION){
                 Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
                 OpIzq.Valor.forEach((element,index) => {
                     Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
@@ -907,13 +940,32 @@ function traducirOperacionBinaria(valor,ts){
                 }
                 Code+=`free(${getLastTemporalArr()});\n`
                 return {Valor:getLastTemporal(),Tipo:aux.Tipo}
-            }   
+            }
+            else if(OpDer.ID!==undefined){
+                if(OpDer.ID.toUpperCase()==="TOLOWERCASE"){
+                    Code+= `auxNum1=${OpIzq.Valor};\n`
+                    Code+= `ToLowerCase();\n`
+                    Code+= generarTemporal()+"=auxNum3;\n"
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+                } 
+                else if(OpDer.ID.toUpperCase()==="TOUPPERCASE"){
+                    Code+= `auxNum1=${OpIzq.Valor};\n`
+                    Code+= `ToUpperCase();\n`
+                    Code+= generarTemporal()+"=auxNum3;\n"
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+                } 
+            }  
             else{
                 if(OpIzq.Tipo.includes("ARR")){
                     return {Valor:OpIzq.Valor.length,Tipo:Tipo_Valor.NUMBER}
                 }
+                else if(OpIzq.Tipo===Tipo_Valor.STRING){
+                    Code+= `auxNum1=${OpIzq.Valor};\n`
+                    Code+= `stringLength();\n`
+                    Code+= generarTemporal()+"=auxNum3;\n"
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+                }
             }
-            
             return
         case Tipo_Operacion.ACCESO_ARR:
             OpIzq=ts.getValor(valor.OpIzq)
@@ -1043,12 +1095,17 @@ float stack[16394];
 float p=0;
 float h=0;
 float auxPtr,auxTemp; 
-int auxNum1,auxNum2,auxNum3,auxNum4; 
+float auxNum1,auxNum2,auxNum3,auxNum4,auxNum5; 
 void printString();
 void printNumber();
 void printBoolean();
 void potencia();
 void concatStrings();
+void concatStringNumber();
+void compareStrings();
+void ToLowerCase();
+void ToUpperCase();
+void stringLength();
 `
     if(ContadorT>0){
         TempTxt+="float ";
@@ -1073,16 +1130,27 @@ return;
     
 void printString(){
 
-    S0:
+    L0:
         auxTemp=heap[(int)auxPtr];
-        if(auxTemp!=-1) goto S1;
-        goto S2;
+        if(auxTemp!=-1) goto L1;
+        goto L4;
     
-    S1:
+    L1:
+        if(auxTemp>=199) goto L2;
+        if(auxTemp<-1) goto L3;
         printf("%c", (char)auxTemp);
         auxPtr=auxPtr+1;
-        goto S0;
-    S2:
+        goto L0;
+    L2:
+        auxTemp=auxTemp-200;
+        printf("%f", (float)auxTemp);
+        auxPtr=auxPtr+1;
+        goto L0;
+    L3:
+        printf("%f", (float)auxTemp);
+        auxPtr=auxPtr+1;
+        goto L0;
+    L4:
         printf("\\n");
         return ;
 
@@ -1150,6 +1218,116 @@ void concatStrings(){
     return;
 
 }
+void concatStringNumber(){
+    auxNum4=h;
+    
+    L0:
+    auxNum3=heap[(int)auxNum1];
+    if(auxNum3!=-1)goto L1;
+    goto L2;
+    L1: 
+    heap[(int)h]=auxNum3;
+    h=h+1;
+    auxNum1=auxNum1+1;
+    goto L0;
+    
+    L2:
+    if(auxNum2>=-1) auxNum2=auxNum2+200;
+    heap[(int)h]=auxNum2;
+    h=h+1;
+    goto L4;
+    
+    L4:
+    heap[(int)h]=-1;
+    h=h+1;
+    return;
+    
+}
+void compareStrings(){
+    
+    L0:
+    auxNum3=heap[(int)auxNum1];
+    auxNum4=heap[(int)auxNum2];
+    auxNum1=auxNum1+1;
+    auxNum2=auxNum2+1;
+    if(auxNum3==-1)goto L1;
+    if(auxNum3==auxNum4)goto L0;
+    goto L3;
+    
+    L1:
+    if(auxNum4==-1) goto L2;
+    goto L3;
+    
+    L2:
+    auxNum5=1;
+    goto L4;
+    
+    L3:
+    auxNum5=0;
+    goto L4;
+    
+    L4:
+    return;
+    
+}
+void ToLowerCase(){
+    auxNum3=h;
+    L0:
+    auxNum2=heap[(int)auxNum1];
+    auxNum1=auxNum1+1;
+    if(auxNum2==-1)goto L4;
+    if(auxNum2<91) goto L1;
+    goto L3;
+    
+    L1:
+    if(auxNum2>64) auxNum2=auxNum2+32;
+    goto L3;
+    
+    L3:
+    heap[(int)h]=auxNum2;
+    h=h+1;
+    goto L0;
+    
+    L4:
+    return;
+}
+void ToUpperCase(){
+    auxNum3=h;
+    L0:
+    auxNum2=heap[(int)auxNum1];
+    auxNum1=auxNum1+1;
+    if(auxNum2==-1)goto L4;
+    if(auxNum2<123) goto L1;
+    goto L3;
+    
+    L1:
+    if(auxNum2>96) auxNum2=auxNum2-32;
+    goto L3;
+    
+    L3:
+    heap[(int)h]=auxNum2;
+    h=h+1;
+    goto L0;
+    
+    L4:
+    return;
+}
+void stringLength(){
+    auxNum3=0;
+    L0:
+    auxNum2=heap[(int)auxNum1];
+    auxNum1=auxNum1+1;
+    if(auxNum2==-1)goto L3;
+    goto L2;
+    
+    L2:
+    auxNum3=auxNum3+1;
+    goto L0;
+    
+    L3:
+    return;
+}
+
 `
 
     return TempTxt
