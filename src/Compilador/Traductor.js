@@ -156,7 +156,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext){
 
             }
             else if(instruccion.Tipo===Tipo_Instruccion.ASIGNACION_ARR){
-                
+
             }
             else if(instruccion.Tipo===Tipo_Instruccion.MAS_ASIGNACION_ARR){
                 
@@ -892,22 +892,29 @@ function traducirOperacionBinaria(valor,ts){
         case Tipo_Operacion.ATRIBUTO:
             OpIzq=ts.getValor(valor.OpIzq)
             OpDer=valor.OpDer
-            Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
-            OpIzq.Valor.forEach((element,index) => {
-                Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
-            });
-            let aux=getPropIndex(OpIzq.Tipo,OpDer,ts)
-            if(aux.Tipo===Tipo_Valor.NUMBER||aux.Tipo===Tipo_Valor.BOOLEAN){
-                Code+=generarTemporal()+`=${getLastTemporalArr()}[${aux.Index}];\n`
-                Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
-            }
+            if(OpDer!=="length"){
+                Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
+                OpIzq.Valor.forEach((element,index) => {
+                    Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
+                });
+                let aux=getPropIndex(OpIzq.Tipo,OpDer,ts)
+                if(aux.Tipo===Tipo_Valor.NUMBER||aux.Tipo===Tipo_Valor.BOOLEAN){
+                    Code+=generarTemporal()+`=${getLastTemporalArr()}[${aux.Index}];\n`
+                    Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
+                }
+                else{
+                    Code+=generarTemporal()+`=${getLastTemporalArr()}[${aux.Index}];\n`
+                }
+                Code+=`free(${getLastTemporalArr()});\n`
+                return {Valor:getLastTemporal(),Tipo:aux.Tipo}
+            }   
             else{
-                Code+=generarTemporal()+`=${getLastTemporalArr()}[${aux.Index}];\n`
+                if(OpIzq.Tipo.includes("ARR")){
+                    return {Valor:OpIzq.Valor.length,Tipo:Tipo_Valor.NUMBER}
+                }
             }
-            Code+=`free(${getLastTemporalArr()});\n`
             
-            return {Valor:getLastTemporal(),Tipo:aux.Tipo}
-
+            return
         case Tipo_Operacion.ACCESO_ARR:
             OpIzq=ts.getValor(valor.OpIzq)
             Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
