@@ -7,7 +7,7 @@ const _ = require('lodash')
 
 //AST modificado que se regresara si hay funciones anidadas
 let AST,Code;
-let ContadorT,ContadorL,ContadorA
+let ContadorT,ContadorL,ContadorA,ContadorB
 
 /**
  * Crea un símbolo
@@ -119,6 +119,7 @@ export function Traducir (Instrucciones){
     ContadorT=0
     ContadorL=0
     ContadorA=0;
+    ContadorB=0;
     AST=JSON.parse(JSON.stringify(Instrucciones))
     //BuscarDec(AST,GlobalTS)
     TraducirBloque(AST,GlobalTS)
@@ -156,7 +157,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext){
 
             }
             else if(instruccion.Tipo===Tipo_Instruccion.ASIGNACION_ARR){
-
+                AsigArrTo3D(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.MAS_ASIGNACION_ARR){
                 
@@ -386,6 +387,50 @@ function AsigTo3D(instruccion,TS){
     }
     Code+= `//Termina asignacion de ${instruccion.ID}\n`
     
+}
+
+/**
+ * Ejecuta una sentencia de asignacion a array
+ * @param {*} instruccion 
+ * @param {*} ts 
+ */
+function AsigArrTo3D(instruccion,TS){
+    Code+='//Comienza asignacion en '+instruccion.ID+"\n"
+    let arr =TS.getValor(instruccion.ID)
+    let val =getValor(instruccion.Valor,TS,true)
+    let pos1,pos2;
+    if(instruccion.Posicion2===undefined){
+        pos1=getValor(instruccion.Posicion,TS)
+
+        if(arr.Tipo.includes("STRING")){
+            Code+=`${generarTemporalArrArr()}=(float**)malloc(${arr.Valor.length}*sizeof(float*));\n`
+            arr.Valor.forEach((element,index) => {
+                Code+=`${getLastTemporalArrArr()}[${index}]=&${element};\n`
+            });
+
+            Code+=generarTemporalArr()+`=${getLastTemporalArrArr()}[(int)${pos1.Valor}];\n`
+            Code+=`*${getLastTemporalArr()}=${val.Valor};\n`
+            
+            Code+=`free(${getLastTemporalArrArr()});\n`
+
+        }
+        else{
+            Code+=`${generarTemporalArr()}=(float*)malloc(${arr.Valor.length}*sizeof(float));\n`
+            arr.Valor.forEach((element,index) => {
+                Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
+            });
+
+            Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${pos1.Valor}];\n`
+            Code+=`heap[(int)${getLastTemporal()}]=${val.Valor};\n`
+            
+            Code+=`free(${getLastTemporalArr()});\n`
+        }
+    }
+    else{
+        pos1=getValor(instruccion.Posicion1,TS)
+        pos2=getValor(instruccion.Posicion2,TS)
+
+    }
 }
 
 /**
@@ -803,9 +848,12 @@ function traducirOperacionBinaria(valor,ts){
 
 
     let OpIzq=getValor(valor.OpIzq,ts)
-    let OpDer
+    let OpDer,OpAux
     if(valor.OpDer!==undefined&&valor.OpTipo!==Tipo_Operacion.ATRIBUTO){
     OpDer=getValor(valor.OpDer,ts)
+    }
+    if(valor.OpAux!==undefined){
+        OpAux=getValor(valor.OpAux,ts)
     }
     
     switch(valor.OpTipo){
@@ -821,6 +869,11 @@ function traducirOperacionBinaria(valor,ts){
         case Tipo_Operacion.SUMA:
             //NUMBER-NUMBER
             if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.NUMBER){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"+"+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
+            //NUMBER-BOOLEAN
+            if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.BOOLEAN){
                 Code+= generarTemporal()+"="+OpIzq.Valor+"+"+OpDer.Valor+";\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
             }
@@ -840,8 +893,14 @@ function traducirOperacionBinaria(valor,ts){
                 Code+= generarTemporal()+"=auxNum4;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
             }
-
             //STRING-BOOLEAN
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.BOOLEAN){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `concatStringBoolean();\n`
+                Code+= generarTemporal()+"=auxNum4;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+            }
             return
         case Tipo_Operacion.RESTA:
             Code+= generarTemporal()+"="+OpIzq.Valor+"-"+OpDer.Valor+";\n"
@@ -969,18 +1028,39 @@ function traducirOperacionBinaria(valor,ts){
             return
         case Tipo_Operacion.ACCESO_ARR:
             OpIzq=ts.getValor(valor.OpIzq)
-            Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
-            OpIzq.Valor.forEach((element,index) => {
-                Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
-            });
-            if(OpIzq.Tipo.includes("NUMBER")||OpIzq.Tipo.includes("BOOLEAN")){
-                Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor}];\n`
-                Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
+            //ACCESO A DOS 
+            if(Array.isArray(OpIzq.Valor[0])){
+                let n=OpIzq.Valor.length
+                let m=OpIzq.Valor[0].length
+                Code+=`${generarTemporalArr()}=(float*)malloc(${n}*${m}*sizeof(float));\n`
+                OpIzq.Valor.forEach((element,index) => {
+                    OpIzq.Valor[index].forEach((val,indice) => {
+                        Code+=`${getLastTemporalArr()}[${index*m+indice}]=${val};\n`
+                    });
+                });
+                if(OpIzq.Tipo.includes("NUMBER")||OpIzq.Tipo.includes("BOOLEAN")){
+                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor*m+OpAux.Valor}];\n`
+                    Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
+                }
+                else{
+                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor*m+OpAux.Valor}];\n`
+                }
+                Code+=`free(${getLastTemporalArr()});\n`
             }
             else{
-                Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor}];\n`
+                Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
+                OpIzq.Valor.forEach((element,index) => {
+                    Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
+                });
+                if(OpIzq.Tipo.includes("NUMBER")||OpIzq.Tipo.includes("BOOLEAN")){
+                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor}];\n`
+                    Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
+                }
+                else{
+                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor}];\n`
+                }
+                Code+=`free(${getLastTemporalArr()});\n`
             }
-            Code+=`free(${getLastTemporalArr()});\n`
             
             return {Valor:getLastTemporal(),Tipo:OpIzq.Tipo.replaceAll("_ARR","")}
             
@@ -1064,6 +1144,12 @@ function generarTemporalArr(){
     return "a"+ContadorA++
 }
 /**
+ * Generar un nuevo string para un temporal
+ */
+function generarTemporalArrArr(){
+    return "b"+ContadorB++
+}
+/**
  * Obtiene la ultima etiqueta generada
  */
 function getLastTemporal(){
@@ -1074,6 +1160,12 @@ function getLastTemporal(){
  */
 function getLastTemporalArr(){
     return "a"+(ContadorA-1)
+}
+/**
+ * Obtiene la ultima etiqueta generada
+ */
+function getLastTemporalArrArr(){
+    return "b"+(ContadorB-1)
 }
 /**
  * Generar un nuevo string para una etiqueta
@@ -1106,6 +1198,7 @@ void compareStrings();
 void ToLowerCase();
 void ToUpperCase();
 void stringLength();
+void concatStringBoolean();
 `
     if(ContadorT>0){
         TempTxt+="float ";
@@ -1117,6 +1210,12 @@ void stringLength();
         TempTxt+="float ";
         for(let i=0;i<ContadorA;i++){
             TempTxt+= i+1===ContadorA ? "*a"+i+";\n" : "*a"+i+","
+        }
+    }
+    if(ContadorB>0){
+        TempTxt+="float ";
+        for(let i=0;i<ContadorB;i++){
+            TempTxt+= i+1===ContadorB ? "**b"+i+";\n" : "*b"+i+","
         }
     }
     TempTxt += `
@@ -1326,6 +1425,57 @@ void stringLength(){
     
     L3:
     return;
+}
+void concatStringBoolean(){
+    auxNum4=h;
+    
+    L0:
+    auxNum3=heap[(int)auxNum1];
+    if(auxNum3!=-1)goto L1;
+    goto L2;
+    L1: 
+    heap[(int)h]=auxNum3;
+    h=h+1;
+    auxNum1=auxNum1+1;
+    goto L0;
+    
+    L2:
+    if(auxNum2==0)goto L3;
+    goto L4;
+    
+    L3: 
+    heap[(int)h] = 102;
+    h=h+1;
+    heap[(int)h] = 97;
+    h=h+1;
+    heap[(int)h] = 108;
+    h=h+1;
+    heap[(int)h] = 115;
+    h=h+1;
+    heap[(int)h] = 101;
+    h=h+1;
+    heap[(int)h] = -1;
+    h=h+1;
+    goto L5;
+    
+    L4:
+    heap[(int)h] = 116;
+    h=h+1;
+    heap[(int)h] = 114;
+    h=h+1;
+    heap[(int)h] = 117;
+    h=h+1;
+    heap[(int)h] = 101;
+    h=h+1;
+    heap[(int)h] = -1;
+    h=h+1;
+    goto L5;
+
+    L5:
+    heap[(int)h]=-1;
+    h=h+1;
+    return;
+
 }
 
 `

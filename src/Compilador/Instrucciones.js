@@ -92,11 +92,12 @@ const AST_Tools = {
     * @param operandoDer Operando Derecho
     * @param opTipo  Tipo De Operacion
 	 */
-	operacionBinaria: function(opIzq, opDer, opTipo) {
+	operacionBinaria: function(opIzq, opDer, opTipo,opAux) {
 		return {
             OpIzq: opIzq,
             OpDer: opDer,
-            OpTipo: opTipo
+			OpTipo: opTipo,
+			OpAux:opAux
         }
 	},
 

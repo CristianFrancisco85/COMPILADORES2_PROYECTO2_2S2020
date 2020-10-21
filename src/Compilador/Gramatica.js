@@ -337,7 +337,7 @@ case 98:
  this.$ = AST_Tools.operacionBinaria($$[$0-3],$$[$0-1],Tipo_Operacion.ACCESO_ARR)
 break;
 case 99:
- this.$ = AST_Tools.operacionBinaria(AST_Tools.operacionBinaria($$[$0-6],$$[$0-4],Tipo_Operacion.ACCESO_ARR),$$[$0-1],Tipo_Operacion.ACCESO_ARR)
+ this.$ = AST_Tools.operacionBinaria($$[$0-6],$$[$0-4],Tipo_Operacion.ACCESO_ARR,$$[$0-1])
 break;
 case 100:
  this.$ = AST_Tools.operacionBinaria ($$[$0-1],undefined,Tipo_Operacion.DECREMENTO); 
