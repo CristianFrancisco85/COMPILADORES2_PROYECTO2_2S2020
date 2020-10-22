@@ -286,7 +286,7 @@ function ConsoleLogTo3D(instruccion,TS){
             Code+=`printf("${instruccion.Valor.Valor}");printf("\\n");\n`
         }
         else{
-            Code+=`printf("%f", (float)${instruccion.Valor.Valor});printf("\\n");\n`
+            Code+=`printf("%f", (double)${instruccion.Valor.Valor});printf("\\n");\n`
         }
     }
     else{
@@ -396,41 +396,55 @@ function AsigTo3D(instruccion,TS){
  */
 function AsigArrTo3D(instruccion,TS){
     Code+='//Comienza asignacion en '+instruccion.ID+"\n"
+    //Se obtiene referencia al array
     let arr =TS.getValor(instruccion.ID)
     let val =getValor(instruccion.Valor,TS,true)
     let pos1,pos2;
     if(instruccion.Posicion2===undefined){
         pos1=getValor(instruccion.Posicion,TS)
 
-        if(arr.Tipo.includes("STRING")){
-            Code+=`${generarTemporalArrArr()}=(float**)malloc(${arr.Valor.length}*sizeof(float*));\n`
-            arr.Valor.forEach((element,index) => {
-                Code+=`${getLastTemporalArrArr()}[${index}]=&${element};\n`
-            });
-
-            Code+=generarTemporalArr()+`=${getLastTemporalArrArr()}[(int)${pos1.Valor}];\n`
-            Code+=`*${getLastTemporalArr()}=${val.Valor};\n`
-            
-            Code+=`free(${getLastTemporalArrArr()});\n`
-
+        let aux=generarTemporal();
+        if(arr.Tipo===Tipo_Valor.NUMBER_ARR||arr.Tipo===Tipo_Valor.BOOLEAN_ARR){
+            Code+=`${aux}=${arr.Valor}+${pos1.Valor};\n`
+            Code+=`${aux}=${aux}+1;\n`
+            Code+=`${aux}=heap[(int)${aux}];\n`
+            Code+=`heap[(int)${aux}]=${val.Valor};\n`          
         }
         else{
-            Code+=`${generarTemporalArr()}=(float*)malloc(${arr.Valor.length}*sizeof(float));\n`
-            arr.Valor.forEach((element,index) => {
-                Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
-            });
-
-            Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${pos1.Valor}];\n`
-            Code+=`heap[(int)${getLastTemporal()}]=${val.Valor};\n`
-            
-            Code+=`free(${getLastTemporalArr()});\n`
+            Code+=`${aux}=${arr.Valor}+${pos1.Valor};\n`
+            Code+=`${aux}=${aux}+1;\n`
+            Code+=`heap[(int)${aux}]=${val.Valor};\n`
         }
+
     }
     else{
-        pos1=getValor(instruccion.Posicion1,TS)
+        pos1=getValor(instruccion.Posicion,TS)
         pos2=getValor(instruccion.Posicion2,TS)
 
+        let aux=generarTemporal();
+        if(arr.Tipo===Tipo_Valor.NUMBER_ARR_ARR||arr.Tipo===Tipo_Valor.BOOLEAN_ARR_ARR){
+            Code+=`${aux}=${arr.Valor}+${pos1.Valor};\n`
+            Code+=`${aux}=${aux}+1;\n`
+            Code+=`${aux}=heap[(int)${aux}];\n`
+
+            Code+=`${aux}=${aux}+${pos2.Valor};\n`
+            Code+=`${aux}=${aux}+1;\n`
+            Code+=`${aux}=heap[(int)${aux}];\n`
+
+            Code+=`heap[(int)${aux}]=${val.Valor};\n`          
+        }
+        else{
+            Code+=`${aux}=${arr.Valor}+${pos1.Valor};\n`
+            Code+=`${aux}=${aux}+1;\n`
+
+            Code+=`${aux}=${aux}+${pos2.Valor};\n`
+            Code+=`${aux}=${aux}+1;\n`
+
+            Code+=`heap[(int)${aux}]=${val.Valor};\n`
+        }
+
     }
+    Code+='//Termina asignacion en '+instruccion.ID+"\n"
 }
 
 /**
@@ -696,7 +710,6 @@ function ForInTo3D(instruccion,TS){
  */
 function traducirValor(valor,ts,bool){
     //VALOR PUNTUALES Y UNITARIOS 
-    
     if(valor.Valor!==undefined){
         if(valor.Tipo===Tipo_Valor.STRING){
             return traducirString(valor.Valor)
@@ -738,6 +751,9 @@ function traducirValor(valor,ts,bool){
             else{
                 return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
             }
+        }
+        if(valor.Tipo===Tipo_Valor.NEWARR){
+
         }
         else{
             if(bool){
@@ -820,14 +836,11 @@ function getValor(valor,ts){
     }
     else if(Array.isArray(valor)){
 
-        if(valor.length===0){
-            //return "[]"
-        }
-        else if(valor[0].ID===undefined){
-            //return traducirArray(valor)
+        if(valor[0].ID===undefined){
+            return traducirArray(valor)
         }
         else{            
-            //return traducirType(valor,ts)
+            return traducirType(valor,ts)
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
@@ -1139,36 +1152,14 @@ function getPropIndex(type,prop,ts){
 function generarTemporal(){
     return "t"+ContadorT++
 }
-/**
- * Generar un nuevo string para un temporal
- */
-function generarTemporalArr(){
-    return "a"+ContadorA++
-}
-/**
- * Generar un nuevo string para un temporal
- */
-function generarTemporalArrArr(){
-    return "b"+ContadorB++
-}
+
 /**
  * Obtiene la ultima etiqueta generada
  */
 function getLastTemporal(){
     return "t"+(ContadorT-1)
 }
-/**
- * Obtiene la ultima etiqueta generada
- */
-function getLastTemporalArr(){
-    return "a"+(ContadorA-1)
-}
-/**
- * Obtiene la ultima etiqueta generada
- */
-function getLastTemporalArrArr(){
-    return "b"+(ContadorB-1)
-}
+
 /**
  * Generar un nuevo string para una etiqueta
  */
@@ -1183,13 +1174,12 @@ function generarEtiqueta(){
 function generarEncabezado(){
 
     let TempTxt = `#include <stdio.h>
-#include <stdlib.h>
-float heap[16384];
-float stack[16394];
-float p=0;
-float h=0;
-float auxPtr,auxTemp; 
-float auxNum1,auxNum2,auxNum3,auxNum4,auxNum5; 
+double heap[16384];
+double stack[16394];
+double p=0;
+double h=0;
+double auxPtr,auxTemp; 
+double auxNum1,auxNum2,auxNum3,auxNum4,auxNum5; 
 void printString();
 void printNumber();
 void printBoolean();
@@ -1203,19 +1193,19 @@ void stringLength();
 void concatStringBoolean();
 `
     if(ContadorT>0){
-        TempTxt+="float ";
+        TempTxt+="double ";
         for(let i=0;i<ContadorT;i++){
             TempTxt+= i+1===ContadorT ? "t"+i+";\n" : "t"+i+","
         }
     }
     if(ContadorA>0){
-        TempTxt+="float ";
+        TempTxt+="double ";
         for(let i=0;i<ContadorA;i++){
             TempTxt+= i+1===ContadorA ? "*a"+i+";\n" : "*a"+i+","
         }
     }
     if(ContadorB>0){
-        TempTxt+="float ";
+        TempTxt+="double ";
         for(let i=0;i<ContadorB;i++){
             TempTxt+= i+1===ContadorB ? "**b"+i+";\n" : "*b"+i+","
         }
@@ -1244,11 +1234,11 @@ void printString(){
         goto L0;
     L2:
         auxTemp=auxTemp-200;
-        printf("%f", (float)auxTemp);
+        printf("%f", (double)auxTemp);
         auxPtr=auxPtr+1;
         goto L0;
     L3:
-        printf("%f", (float)auxTemp);
+        printf("%f", (double)auxTemp);
         auxPtr=auxPtr+1;
         goto L0;
     L4:
@@ -1258,7 +1248,7 @@ void printString(){
 }
 void printNumber(){
 
-    printf("%f", (float)auxTemp);
+    printf("%f", (double)auxTemp);
     printf("\\n");
     return ;
 }
