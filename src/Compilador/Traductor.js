@@ -613,6 +613,9 @@ function ForOfTo3D(instruccion,TS){
     let auxVar = newTS.simbolos[newTS.simbolos.length-1]
     //Se obtiene variable a iterar
     let auxArr = traducirValor(instruccion.Var,newTS)
+    //Se obtiene length de auxArr
+    let length = generarTemporal()
+    Code+=`${length}=heap[(int)${auxArr.Valor}];\n`
     //Etiquetas
     let EtiquetaBegin=generarEtiqueta()
     let EtiquetaNext=generarEtiqueta()
@@ -620,20 +623,24 @@ function ForOfTo3D(instruccion,TS){
     Code+=`${Iterador}=-1;\n`
     Code+=`${EtiquetaBegin}:\n`
     Code+=`${Iterador}=${Iterador}+1;\n`
-    Code+=`if(${Iterador}>=${auxArr.Valor.length})goto ${EtiquetaNext};\n`
+    Code+=`if(${Iterador}>=${length}) goto ${EtiquetaNext};\n`
 
-    Code+=`${generarTemporalArr()}=(float*)malloc(${auxArr.Valor.length}*sizeof(float));\n`
-    auxArr.Valor.forEach((element,index) => {
-        Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
-    });
-    Code+=`${generarTemporal()}=${getLastTemporalArr()}[(int)${Iterador}];\n`
-    if(auxVar.Tipo===Tipo_Valor.NUMBER||auxVar.Tipo===Tipo_Valor.BOOLEAN){
-        Code+=`${getLastTemporal()}=heap[(int)${getLastTemporal()}];\n`
-        Code+=`stack[(int)${auxVar.Valor}]=${getLastTemporal()};\n`
+    let aux=generarTemporal();
+    if(auxArr.Tipo===Tipo_Valor.NUMBER_ARR||auxArr.Tipo===Tipo_Valor.BOOLEAN_ARR){
+        Code+=`${aux}=${auxArr.Valor}+${Iterador};\n`
+        Code+=`${aux}=${aux}+1;\n`
+        Code+=`${aux}=heap[(int)${aux}];\n`
+        Code+=`${aux}=heap[(int)${aux}];\n`
+        Code+=`stack[(int)${auxVar.Valor}]=${aux};\n`
     }
     else{
-        Code+=`${auxVar.Valor}=${getLastTemporal()};\n`
+        Code+=`${aux}=${auxArr.Valor}+${Iterador};\n`
+        Code+=`${aux}=${aux}+1;\n`
+        Code+=`${aux}=heap[(int)${aux}];\n`
+        Code+=`${auxVar.Valor}=${aux};\n`
     }
+
+            
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext) 
     Code+=`goto ${EtiquetaBegin};\n`
     Code+=`${EtiquetaNext}:\n`
@@ -657,6 +664,9 @@ function ForInTo3D(instruccion,TS){
     let auxVar = newTS.simbolos[newTS.simbolos.length-1]
     //Se obtiene variable a iterar
     let auxArr = traducirValor(instruccion.Var,newTS)
+    //Se obtiene length de auxArr
+    let length = generarTemporal()
+    Code+=`${length}=heap[(int)${auxArr.Valor}];\n`
     //Etiquetas
     let EtiquetaBegin=generarEtiqueta()
     let EtiquetaNext=generarEtiqueta()
@@ -664,7 +674,7 @@ function ForInTo3D(instruccion,TS){
     Code+=`${Iterador}=-1;\n`
     Code+=`${EtiquetaBegin}:\n`
     Code+=`${Iterador}=${Iterador}+1;\n`
-    Code+=`if(${Iterador}>=${auxArr.Valor.length})goto ${EtiquetaNext};\n`
+    Code+=`if(${Iterador}>=${length})goto ${EtiquetaNext};\n`
     Code+=`stack[(int)${auxVar.Valor}]=${Iterador};\n`
     
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext) 
@@ -719,18 +729,14 @@ function traducirValor(valor,ts,bool){
         }
         else if(valor.Tipo===Tipo_Valor.ID){
             let auxSimb=getValor(valor,ts)
-            if(auxSimb.Tipo===Tipo_Valor.STRING){
-                return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
-            }
-            //PARA ARREGLOS
-            else if(Array.isArray(auxSimb.Valor)){
-                return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
-            }
-            //FALTAN MAS TIPOS
-            else{
+            if(auxSimb.Tipo===Tipo_Valor.NUMBER||auxSimb.Tipo===Tipo_Valor.BOOLEAN){
                 Code+=generarTemporal()+"=p;\n"
                 Code+= `stack[(int)p] = ${auxSimb.Valor};\np=p+1;\n`
                 return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
+                
+            }
+            else{
+                return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
             }
         }
         else{
@@ -763,7 +769,7 @@ function traducirValor(valor,ts,bool){
     }
     else if(valor.OpTipo!==undefined){
         let aux = traducirOperacionBinaria(valor,ts)
-        if(aux.Tipo!==Tipo_Valor.STRING){
+        if(aux.Tipo===Tipo_Valor.NUMBER || aux.Tipo===Tipo_Valor.BOOLEAN){
             Code+=generarTemporal()+"=p;\n"
             Code+= `stack[(int)p] = ${aux.Valor};\np=p+1;\n`
         }
@@ -834,7 +840,7 @@ function getValor(valor,ts){
         return traducirOperacionBinaria(valor,ts);
     }
     else{
-
+        return ts.getValor(valor)
     }
 }
 
@@ -848,12 +854,9 @@ function traducirOperacionBinaria(valor,ts){
 
 
     let OpIzq=getValor(valor.OpIzq,ts)
-    let OpDer,OpAux
+    let OpDer
     if(valor.OpDer!==undefined&&valor.OpTipo!==Tipo_Operacion.ATRIBUTO){
     OpDer=getValor(valor.OpDer,ts)
-    }
-    if(valor.OpAux!==undefined){
-        OpAux=getValor(valor.OpAux,ts)
     }
     
     switch(valor.OpTipo){
@@ -982,23 +985,23 @@ function traducirOperacionBinaria(valor,ts){
             Code+= generarTemporal()+"= !"+OpIzq.Valor+";\n"
             return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
         case Tipo_Operacion.ATRIBUTO:
-            OpIzq=ts.getValor(valor.OpIzq)
             OpDer=valor.OpDer
             if(OpDer!=="length"&&OpDer.Tipo!==Tipo_Instruccion.LLAMADA_FUNCION){
-                Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
-                OpIzq.Valor.forEach((element,index) => {
-                    Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
-                });
-                let aux=getPropIndex(OpIzq.Tipo,OpDer,ts)
-                if(aux.Tipo===Tipo_Valor.NUMBER||aux.Tipo===Tipo_Valor.BOOLEAN){
-                    Code+=generarTemporal()+`=${getLastTemporalArr()}[${aux.Index}];\n`
-                    Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
+                let aux=generarTemporal();
+                let index=getPropIndex(OpIzq.Tipo,OpDer,ts)
+                
+                if(index.Tipo===Tipo_Valor.NUMBER||index.Tipo===Tipo_Valor.BOOLEAN){
+                    Code+=`${aux}=${OpIzq.Valor}+${index.Index};\n`
+                    Code+=`${aux}=${aux}+1;\n`
+                    Code+=`${aux}=heap[(int)${aux}];\n`
+                    Code+=`${aux}=heap[(int)${aux}];\n`
                 }
                 else{
-                    Code+=generarTemporal()+`=${getLastTemporalArr()}[${aux.Index}];\n`
+                    Code+=`${aux}=${OpIzq.Valor}+${index.Index};\n`
+                    Code+=`${aux}=${aux}+1;\n`
+                    Code+=`${aux}=heap[(int)${aux}];\n`
                 }
-                Code+=`free(${getLastTemporalArr()});\n`
-                return {Valor:getLastTemporal(),Tipo:aux.Tipo}
+                return {Valor:aux,Tipo:index.Tipo}
             }
             else if(OpDer.ID!==undefined){
                 if(OpDer.ID.toUpperCase()==="TOLOWERCASE"){
@@ -1016,7 +1019,8 @@ function traducirOperacionBinaria(valor,ts){
             }  
             else{
                 if(OpIzq.Tipo.includes("ARR")){
-                    return {Valor:OpIzq.Valor.length,Tipo:Tipo_Valor.NUMBER}
+                    Code+=`${generarTemporal()}=heap[(int)${OpIzq.Valor}];\n`
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
                 }
                 else if(OpIzq.Tipo===Tipo_Valor.STRING){
                     Code+= `auxNum1=${OpIzq.Valor};\n`
@@ -1026,43 +1030,23 @@ function traducirOperacionBinaria(valor,ts){
                 }
             }
             return
-        case Tipo_Operacion.ACCESO_ARR:
-            OpIzq=ts.getValor(valor.OpIzq)
-            //ACCESO A DOS 
-            if(Array.isArray(OpIzq.Valor[0])){
-                let n=OpIzq.Valor.length
-                let m=OpIzq.Valor[0].length
-                Code+=`${generarTemporalArr()}=(float*)malloc(${n}*${m}*sizeof(float));\n`
-                OpIzq.Valor.forEach((element,index) => {
-                    OpIzq.Valor[index].forEach((val,indice) => {
-                        Code+=`${getLastTemporalArr()}[${index*m+indice}]=${val};\n`
-                    });
-                });
-                if(OpIzq.Tipo.includes("NUMBER")||OpIzq.Tipo.includes("BOOLEAN")){
-                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor*m+OpAux.Valor}];\n`
-                    Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
-                }
-                else{
-                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor*m+OpAux.Valor}];\n`
-                }
-                Code+=`free(${getLastTemporalArr()});\n`
+        case Tipo_Operacion.ACCESO_ARR:           
+            let tipo=OpIzq.Tipo.replace("_ARR","")
+            let aux=generarTemporal();
+            console.log(OpIzq)
+            if(OpIzq.Tipo===Tipo_Valor.NUMBER_ARR||OpIzq.Tipo===Tipo_Valor.BOOLEAN_ARR){
+                Code+=`${aux}=${OpIzq.Valor}+${OpDer.Valor};\n`
+                Code+=`${aux}=${aux}+1;\n`
+                Code+=`${aux}=heap[(int)${aux}];\n`
+                Code+=`${aux}=heap[(int)${aux}];\n`
             }
             else{
-                Code+=`${generarTemporalArr()}=(float*)malloc(${OpIzq.Valor.length}*sizeof(float));\n`
-                OpIzq.Valor.forEach((element,index) => {
-                    Code+=`${getLastTemporalArr()}[${index}]=${element};\n`
-                });
-                if(OpIzq.Tipo.includes("NUMBER")||OpIzq.Tipo.includes("BOOLEAN")){
-                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor}];\n`
-                    Code+=getLastTemporal()+`=heap[(int)${getLastTemporal()}];\n`
-                }
-                else{
-                    Code+=generarTemporal()+`=${getLastTemporalArr()}[(int)${OpDer.Valor}];\n`
-                }
-                Code+=`free(${getLastTemporalArr()});\n`
+                Code+=`${aux}=${OpIzq.Valor}+${OpDer.Valor};\n`
+                Code+=`${aux}=${aux}+1;\n`
+                Code+=`${aux}=heap[(int)${aux}];\n`
             }
-            
-            return {Valor:getLastTemporal(),Tipo:OpIzq.Tipo.replaceAll("_ARR","")}
+             
+            return {Valor:aux,Tipo:tipo}
             
         default:
     }
@@ -1080,7 +1064,16 @@ function traducirType(valor,ts){
         aux = traducirValor(element.Valor,ts,true)
         auxArr.push(aux.Valor)    
     });
-    return {Valor:auxArr,Tipo:"TYPE"}
+    let referencia = generarTemporal();
+    Code+=`${referencia}=h;\n`
+    Code+=`heap[(int)h]=${auxArr.length};\n`
+    Code+='h=h+1;\n'
+    auxArr.forEach(element=>{
+        Code+=`heap[(int)h]=${element};\n`
+        Code+='h=h+1;\n'
+    });
+
+    return {Valor:referencia,Tipo:"TYPE"}
 }
 
 /**
@@ -1093,7 +1086,16 @@ function traducirArray(valor,ts){
         aux = traducirValor(element.Valor,ts,true)
         auxArr.push(aux.Valor)    
     });
-    return {Valor:auxArr,Tipo:"ARR"}
+    let referencia = generarTemporal();
+    Code+=`${referencia}=h;\n`
+    Code+=`heap[(int)h]=${auxArr.length};\n`
+    Code+='h=h+1;\n'
+    auxArr.forEach(element=>{
+        Code+=`heap[(int)h]=${element};\n`
+        Code+='h=h+1;\n'
+    });
+
+    return {Valor:referencia,Tipo:"ARR"}
 }
 
 /**

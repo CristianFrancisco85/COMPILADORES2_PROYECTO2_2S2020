@@ -291,7 +291,7 @@ expresion
     | LLAVIZQ listaVal COMA LLAVDER         { $$ = $2}
     | LLAVIZQ listaVal PUNTOYCOMA LLAVDER   { $$ = $2}
     | ID CORIZQ expresion CORDER            { $$ = AST_Tools.operacionBinaria($1,$3,Tipo_Operacion.ACCESO_ARR)} 
-    | ID CORIZQ expresion CORDER CORIZQ expresion CORDER { $$ = AST_Tools.operacionBinaria($1,$3,Tipo_Operacion.ACCESO_ARR,$6)} 
+    | ID CORIZQ expresion CORDER CORIZQ expresion CORDER { $$ = AST_Tools.operacionBinaria(AST_Tools.operacionBinaria($1,$3,Tipo_Operacion.ACCESO_ARR),$6,Tipo_Operacion.ACCESO_ARR)}
 ;
 
 incremento_decremento 
