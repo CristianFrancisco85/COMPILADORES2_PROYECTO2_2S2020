@@ -226,9 +226,9 @@ listaID
     }      
     //CON VALOR
     |listaID COMA ID DOSPUNTOS tipo IGUAL expresion                             {$1.push(AST_Tools.newID($3,$5,$7));}                                              
-    |listaID COMA ID DOSPUNTOS tipo IGUAL NEW ARRAY PARIZQ expresion PARDER     {$1.push(AST_Tools.newID($3,$5,$7));} 
+    //|listaID COMA ID DOSPUNTOS tipo IGUAL NEW ARRAY PARIZQ expresion PARDER     {$1.push(AST_Tools.newID($3,$5,$7));} 
     |ID DOSPUNTOS tipo IGUAL expresion                                          {$$=AST_Tools.newIDList($1,$3,$5)}                                             
-    |ID DOSPUNTOS tipo IGUAL NEW ARRAY PARIZQ expresion PARDER                  {$$=AST_Tools.newIDList($1,$3,AST_Tools.crearValor($8,Tipo_Valor.NEWARR))}
+    //|ID DOSPUNTOS tipo IGUAL NEW ARRAY PARIZQ expresion PARDER                  {$$=AST_Tools.newIDList($1,$3,AST_Tools.crearValor($8,Tipo_Valor.NEWARR))}
        
 ;
 
@@ -285,6 +285,7 @@ expresion
     | llamadaFuncion                        { $$ = $1}
     | bloqueTernario                        { $$ = $1}
     | atributos                             { $$ = $1}
+    | NEW ARRAY PARIZQ expresion PARDER     { $$ = AST_Tools.crearValor($4,Tipo_Valor.NEWARR)}
     | CORIZQ listaArr CORDER                { $$ = $2}
     | CORIZQ  CORDER                        { $$ = []}
     | LLAVIZQ listaVal LLAVDER              { $$ = $2}

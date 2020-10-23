@@ -53,7 +53,7 @@ class TablaSimbolos {
             return simb.ID===id;
         });
         if(simbolo.length===0){
-            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION){
+            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION||tipo2===Tipo_Valor.NEWARR){
                 this.simbolos.push(crearSimbolo(id,tipo,valor,rol));
             }
             else{
@@ -859,7 +859,7 @@ function traducirValor(valor,ts,bool){
             }
         }
         if(valor.Tipo===Tipo_Valor.NEWARR){
-
+            return traducirNewArr(valor,ts)
         }
         else{
             if(bool){
@@ -877,7 +877,7 @@ function traducirValor(valor,ts,bool){
     else if(Array.isArray(valor)){
 
         if(valor[0].ID===undefined){
-            return traducirArray(valor)
+            return traducirArray(valor,ts)
         }
         else{            
             return traducirType(valor,ts)
@@ -941,6 +941,9 @@ function getValor(valor,ts){
                 return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
             }
         }
+        if(valor.Tipo===Tipo_Valor.NEWARR){
+            return traducirNewArr(valor,ts)
+        }
         else{
             return {Valor:valor.Valor,Tipo:Tipo_Valor.NUMBER}
         }
@@ -948,7 +951,7 @@ function getValor(valor,ts){
     else if(Array.isArray(valor)){
 
         if(valor[0].ID===undefined){
-            return traducirArray(valor)
+            return traducirArray(valor,ts)
         }
         else{            
             return traducirType(valor,ts)
@@ -1033,7 +1036,7 @@ function traducirOperacionBinaria(valor,ts){
             Code+= generarTemporal()+"="+OpIzq.Valor+"-"+OpDer.Valor+";\n"
             return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.MODULO:
-            Code+= generarTemporal()+"="+OpIzq.Valor+"%"+OpDer.Valor+";\n"
+            Code+= generarTemporal()+"="+"fmod("+OpIzq.Valor+","+OpDer.Valor+");\n"
             return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
         case Tipo_Operacion.POTENCIA:
             Code+= `auxNum1=${OpIzq.Valor};\n`
@@ -1173,7 +1176,6 @@ function traducirOperacionBinaria(valor,ts){
         case Tipo_Operacion.ACCESO_ARR:           
             let tipo=OpIzq.Tipo.replace("_ARR","")
             let aux=generarTemporal();
-            console.log(OpIzq)
             if(OpIzq.Tipo===Tipo_Valor.NUMBER_ARR||OpIzq.Tipo===Tipo_Valor.BOOLEAN_ARR){
                 Code+=`${aux}=${OpIzq.Valor}+${OpDer.Valor};\n`
                 Code+=`${aux}=${aux}+1;\n`
@@ -1214,6 +1216,34 @@ function traducirType(valor,ts){
     });
 
     return {Valor:referencia,Tipo:"TYPE"}
+}
+
+/**
+ * Traduce una instruccion de new Array
+ * @param {*} valor 
+ * @param {*} ts 
+ */
+function traducirNewArr(valor,ts) {
+    
+    let auxVal=getValor(valor.Valor)
+    let auxArr=[]
+    for(let i=0;i<auxVal.Valor;i++){
+        Code+=`${generarTemporal()}=h;\n`
+        Code+='h=h+1;\n'
+        auxArr.push(getLastTemporal())
+    }
+    let aux=generarTemporal();
+    Code+=`${aux}=h;\n`
+    Code+=`heap[(int)h]=${auxVal.Valor};\n`
+    Code+='h=h+1;\n'
+
+    for(let i=0;i<auxVal.Valor;i++){
+        Code+=`heap[(int)h]=${auxArr[i]};\n`
+        Code+='h=h+1;\n'
+    }
+    
+    
+    return {Valor:aux,Tipo:"ARR"}  
 }
 
 /**
@@ -1301,6 +1331,7 @@ function generarEtiqueta(){
 function generarEncabezado(){
 
     let TempTxt = `#include <stdio.h>
+#include <math.h>
 double heap[16384];
 double stack[16394];
 double stackR[16394];
