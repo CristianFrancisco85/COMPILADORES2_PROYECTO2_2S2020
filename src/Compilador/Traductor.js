@@ -1140,6 +1140,22 @@ function traducirOperacionBinaria(valor,ts){
                     Code+= generarTemporal()+"=auxNum3;\n"
                     return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
                 } 
+                else if(OpDer.ID.toUpperCase()==="CHARAT"){
+                    let auxVal= getValor(OpDer.Params[0].Valor)
+                    Code+= `auxNum1=${OpIzq.Valor};\n`
+                    Code+= `auxNum2=${auxVal.Valor};\n`
+                    Code+= `charAt();\n`
+                    Code+= generarTemporal()+"=auxNum3;\n"
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+                }
+                else if(OpDer.ID.toUpperCase()==="CONCAT"){
+                    let auxVal= getValor(OpDer.Params[0].Valor)
+                    Code+= `auxNum1=${OpIzq.Valor};\n`
+                    Code+= `auxNum2=${auxVal.Valor};\n`
+                    Code+= `concatStrings();\n`
+                    Code+= generarTemporal()+"=auxNum4;\n"
+                    return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+                }  
             }  
             else{
                 if(OpIzq.Tipo.includes("ARR")){
@@ -1302,6 +1318,7 @@ void compareStrings();
 void ToLowerCase();
 void ToUpperCase();
 void stringLength();
+void charAt();
 void concatStringBoolean();
 `
     if(CodeDec.length!==0){
@@ -1533,6 +1550,27 @@ void stringLength(){
     L2:
     auxNum3=auxNum3+1;
     goto L0;
+    
+    L3:
+    return;
+}
+void charAt(){
+    auxNum3=h;
+    auxNum5=-1;
+    L0:
+    auxNum4=heap[(int)auxNum1];
+    auxNum5=auxNum5+1;
+    auxNum1=auxNum1+1;
+    if(auxNum2==auxNum5) goto L1;
+    goto L0;
+    
+    L1:
+    auxNum3=h;
+    heap[(int)h]=auxNum4;
+    h=h+1;
+    heap[(int)h]=-1;
+    h=h+1;
+    goto L3;
     
     L3:
     return;
