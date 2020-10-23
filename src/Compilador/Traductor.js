@@ -1,13 +1,15 @@
 import { Tipo_Instruccion } from './Instrucciones.js';
 import { Tipo_Operacion } from './Instrucciones.js';
 import { Tipo_Valor } from './Instrucciones.js';
-import {Simbolos, CodeTxt} from '../scripts/mainScript.js'
+import {Simbolos, CodeTxt, Console} from '../scripts/mainScript.js'
+import { param } from 'jquery';
 
 const _ = require('lodash')
 
 //AST modificado que se regresara si hay funciones anidadas
-let AST,Code;
+let AST,Code,CodeFun,CodeDec;
 let ContadorT,ContadorL,ContadorA,ContadorB
+let GlobalTS
 
 /**
  * Crea un símbolo
@@ -51,7 +53,7 @@ class TablaSimbolos {
             return simb.ID===id;
         });
         if(simbolo.length===0){
-            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL){
+            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION){
                 this.simbolos.push(crearSimbolo(id,tipo,valor,rol));
             }
             else{
@@ -114,8 +116,10 @@ class TablaSimbolos {
 }
 
 export function Traducir (Instrucciones){
-    let GlobalTS = new TablaSimbolos([])
+    GlobalTS = new TablaSimbolos([])
     Code="";
+    CodeFun=""
+    CodeDec=""
     ContadorT=0
     ContadorL=0
     ContadorA=0;
@@ -131,7 +135,7 @@ export function ReturnAST(){
     return AST
 }
 
-function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext){
+function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
 
 
     Instrucciones.forEach(instruccion => {
@@ -163,37 +167,37 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext){
                 
             }
             else if(instruccion.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
-                
+                FunCallTo3D(instruccion,TS);
             }
             else if(instruccion.Tipo===Tipo_Instruccion.SALIDA){
                 ConsoleLogTo3D(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_IF){
-                IfTo3D(instruccion,TS,EtiquetaBegin,EtiquetaNext)
+                IfTo3D(instruccion,TS,EtiquetaBegin,EtiquetaNext,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
                 
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_WHILE){
-                WhileTo3D(instruccion,TS);
+                WhileTo3D(instruccion,TS,FunObj);
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_DO_WHILE){
-                DoWhileTo3D(instruccion,TS)
+                DoWhileTo3D(instruccion,TS,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_FOR){
-                ForTo3D(instruccion,TS)
+                ForTo3D(instruccion,TS,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_FOR_OF){
-                ForOfTo3D(instruccion,TS)
+                ForOfTo3D(instruccion,TS,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_FOR_IN){
-                ForInTo3D(instruccion,TS)
+                ForInTo3D(instruccion,TS,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.BLOQUE_SWITCH){
-                SwitchTo3D(instruccion,TS,EtiquetaBegin)
+                SwitchTo3D(instruccion,TS,EtiquetaBegin,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.DECL_FUNCION){
-                
+                DecFunTo3D(instruccion,TS);
             }
             else if(instruccion.Tipo===Tipo_Instruccion.CONTINUE){
                 Code+=`goto ${EtiquetaBegin};\n`
@@ -202,7 +206,19 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext){
                 Code+=`goto ${EtiquetaNext};\n`
             }
             else if(instruccion.Tipo===Tipo_Instruccion.RETURN){
-                
+                if(FunObj!==undefined){
+                    if(instruccion.Valor!==undefined){
+                        let val=getValor(instruccion.Valor,TS)
+                        Code+=`stack[(int)${FunObj.Puntero}]=${val.Valor};\n`
+                        Code+=`goto ${FunObj.Etiqueta};\n`
+                    }
+                    else{
+                        Code+=`goto ${FunObj.Etiqueta};\n`
+                    }
+                }
+                else{
+                    //No esta adentro de funcion
+                }
             }
             else if(instruccion.OpTipo===Tipo_Operacion.DECREMENTO||instruccion.OpTipo===Tipo_Operacion.INCREMENTO){
                 IncDecTo3D(instruccion,TS)
@@ -374,17 +390,14 @@ function AsigTo3D(instruccion,TS){
     //Se obtiene variable
     let auxSimb=TS.getValor(instruccion.ID)
     let aux=getValor(instruccion.Valor,TS)
-    //Si es un array o type se pasa por referencia
-    if(Array.isArray(aux.Valor)){
-        TS.actualizar(instruccion.ID,aux.Valor)
+
+    if(auxSimb.Tipo!==Tipo_Valor.NUMBER&&auxSimb.Tipo!==Tipo_Valor.BOOLEAN){
+        Code+= `${auxSimb.Valor}=${aux.Valor};\n` 
+    }  
+    else{   
+    Code+= `stack[(int)${auxSimb.Valor}]=${aux.Valor};\n` 
     }
-    //Si no se pasa por valor
-    else{
-        if(auxSimb.Tipo===Tipo_Valor.STRING){
-            Code+= `${auxSimb.Valor}=${aux.Valor};\n` 
-        }     
-        Code+= `stack[(int)${auxSimb.Valor}]=${aux.Valor};\n` 
-    }
+    
     Code+= `//Termina asignacion de ${instruccion.ID}\n`
     
 }
@@ -464,6 +477,100 @@ function IncDecTo3D(instruccion,TS){
     }
 }
 
+/**
+ * Traduce una declaracion de funcion a 3D
+ * @param {*} instruccion 
+ * @param {*} TS 
+ */
+function DecFunTo3D(instruccion,TS){
+
+    let aux={
+        Parametros:instruccion.Parametros,
+        Instrucciones:instruccion.Instrucciones,
+    }
+    GlobalTS.nuevoSimbolo(instruccion.ID,instruccion.TipoRetorno,"FUNCTION",undefined)
+
+    CodeDec+=`void ${instruccion.ID}();\n`
+    let functionPtr = generarTemporal();
+    let newTS = new TablaSimbolos(TS.simbolos)
+    let EtiquetaNext = generarEtiqueta()
+    CodeFun+=`void ${instruccion.ID}(){\n\n`
+    
+    let params = instruccion.Parametros
+    let paramText=""
+    if(params!==undefined){
+    //Este string se usa para asignar y reasignar parametros
+        paramText+="//Puntero de la funcion\n"
+        paramText+=`${functionPtr}=p;\n`
+        paramText+="//Comienza declaracion de parametros\n"
+        let auxTemp=generarTemporal();
+        params.forEach((element,index)=>{
+            paramText+=`${auxTemp}=${functionPtr}+${index+1};\n`
+            paramText+=`p=p+1;\n`
+            paramText+=`${generarTemporal()}=stack[(int)${auxTemp}];\n`
+            newTS.nuevoSimbolo(element.ID,element.Tipo,"LET",getLastTemporal(),undefined);
+        });
+        paramText+="//Termina declaracion de parametros\n"
+        CodeFun+=paramText
+    }
+
+    //Objeto para las pinches llamadas recursivas
+    let auxObj={ID:instruccion.ID,Puntero:functionPtr,AsigTxt:paramText,Etiqueta:EtiquetaNext}
+    //FALTAN DESANIDAMINETO
+
+
+    //Se traducen instrucciones
+    let auxCode = Code;
+    Code="";
+    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,undefined,EtiquetaNext,auxObj):TraducirBloque([instruccion.Instrucciones],newTS,undefined,EtiquetaNext,auxObj)
+    CodeFun+=Code
+    Code=auxCode;
+    CodeFun+=`${EtiquetaNext}:\n`
+    CodeFun+=`return;\n\n}`
+
+    
+
+}
+
+/**
+ * Traduce una llamada de funcion a 3D
+ * @param {*} instruccion 
+ * @param {*} TS 
+ */
+function FunCallTo3D(instruccion,TS) {
+    Code+='//Comienza llamada a funcion\n'
+    let fun = GlobalTS.getValor(instruccion.ID)
+    let functionPtr = generarTemporal();
+    
+    
+    let params = instruccion.Params
+    //Parametros
+    if(params!==undefined){
+        let auxVal=[]
+        let auxTemp=generarTemporal();
+        Code+='//Comienza creacion de parametros\n'
+        params.forEach((element)=>{
+            auxVal.push(traducirValor(element.Valor,TS))
+        });
+        Code+='//Termina creacion de parametros\n'
+
+        Code+='//Comienza asignacion de parametros en stack\n'
+        Code+=`${functionPtr}=p;\n`
+        params.forEach((element,index)=>{
+            Code+=`${auxTemp}=${functionPtr}+${index+1};\n`
+            Code+=`stack[(int)${auxTemp}]=${auxVal[index].Valor};\n`
+        });
+        Code+='//Termina asignacion de parametros en stack\n'
+    }
+    Code+=`${fun.ID}();\n`
+    let returnVal=generarTemporal();
+    Code+=`${returnVal}=stack[(int)${functionPtr}];\n`
+    Code+='//Termina llamada a funcion\n'
+    console.log(fun)
+    return{Valor:returnVal,Tipo:fun.Tipo}
+    
+}
+
 // CONTROL DE FLUJO
 
 /**
@@ -471,8 +578,7 @@ function IncDecTo3D(instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function IfTo3D (instruccion,TS,EtBegin,EtNext){
-    console.log(instruccion)
+function IfTo3D (instruccion,TS,EtBegin,EtNext,FunObj){
     let newTS = new TablaSimbolos(TS.simbolos)
     let aux = getValor(instruccion.ExpresionLogica,TS)
     let EtiquetaTrue=generarEtiqueta()
@@ -484,12 +590,12 @@ function IfTo3D (instruccion,TS,EtBegin,EtNext){
     Code+= `goto ${EtiquetaFalse};\n`
 
     Code+=`${EtiquetaTrue}:\n`
-    Array.isArray(instruccion.InstruccionesIf)?TraducirBloque(instruccion.InstruccionesIf,newTS,EtBegin,EtNext):TraducirBloque([instruccion.InstruccionesIf],newTS,EtBegin,EtNext)
+    Array.isArray(instruccion.InstruccionesIf)?TraducirBloque(instruccion.InstruccionesIf,newTS,EtBegin,EtNext,FunObj):TraducirBloque([instruccion.InstruccionesIf],newTS,EtBegin,EtNext,FunObj)
     Code+=`goto ${EtiquetaNext};\n`
 
     Code+=`${EtiquetaFalse}:\n`
     if(instruccion.InstruccionesElse!==undefined){
-        Array.isArray(instruccion.InstruccionesElse)?TraducirBloque(instruccion.InstruccionesElse,newTS,EtBegin,EtNext):TraducirBloque([instruccion.InstruccionesElse],newTS,EtBegin,EtNext)
+        Array.isArray(instruccion.InstruccionesElse)?TraducirBloque(instruccion.InstruccionesElse,newTS,EtBegin,EtNext,FunObj):TraducirBloque([instruccion.InstruccionesElse],newTS,EtBegin,EtNext,FunObj)
     }
     Code+=`goto ${EtiquetaNext};\n`
 
@@ -504,7 +610,7 @@ function IfTo3D (instruccion,TS,EtBegin,EtNext){
  * @param {*} instruccion 
  * @param {*} ts 
  */
-function SwitchTo3D(instruccion,ts,EtBegin){
+function SwitchTo3D(instruccion,ts,EtBegin,FunObj){
     Code+='//Comienza traduccion de Switch\n'
     let aux = getValor(instruccion.Expresion,ts)
     let tempVal
@@ -525,7 +631,7 @@ function SwitchTo3D(instruccion,ts,EtBegin){
     });
     instruccion.Casos.forEach((element,index)=>{ 
         Code+=`${auxArr[index]}:\n`
-        Array.isArray(element.Instrucciones)?TraducirBloque(element.Instrucciones,ts,EtBegin,EtiquetaNext):TraducirBloque([element.Instrucciones],ts,EtBegin,EtiquetaNext) 
+        Array.isArray(element.Instrucciones)?TraducirBloque(element.Instrucciones,ts,EtBegin,EtiquetaNext,FunObj):TraducirBloque([element.Instrucciones],ts,EtBegin,EtiquetaNext,FunObj) 
     });
     Code+=`${EtiquetaNext}:\n`
     Code+='//Termina traduccion de Switch\n'
@@ -539,7 +645,7 @@ function SwitchTo3D(instruccion,ts,EtBegin){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function WhileTo3D(instruccion,TS){
+function WhileTo3D(instruccion,TS,FunObj){
 
     let newTS = new TablaSimbolos(TS.simbolos)
     let EtiquetaBegin=generarEtiqueta()
@@ -553,7 +659,7 @@ function WhileTo3D(instruccion,TS){
     Code+= `goto ${EtiquetaNext};\n`
 
     Code+=`${EtiquetaTrue}:\n`
-    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext)
+    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj)
     Code+=`goto ${EtiquetaBegin};\n`
 
     Code+="//Termina traduccion de While\n"
@@ -567,7 +673,7 @@ function WhileTo3D(instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function DoWhileTo3D(instruccion,TS){
+function DoWhileTo3D(instruccion,TS,FunObj){
 
     let newTS = new TablaSimbolos(TS.simbolos)
     let EtiquetaBegin=generarEtiqueta()
@@ -575,7 +681,7 @@ function DoWhileTo3D(instruccion,TS){
 
     Code+="//Comienza traduccion de Do-While\n"
     Code+=`${EtiquetaBegin}:\n`
-    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext)
+    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj)
 
     let aux = getValor(instruccion.ExpresionLogica,TS)
     Code+= `if (${aux.Valor}) goto ${EtiquetaBegin};\n`
@@ -591,7 +697,7 @@ function DoWhileTo3D(instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function ForTo3D(instruccion,TS){
+function ForTo3D(instruccion,TS,FunObj){
 
     let newTS = new TablaSimbolos(TS.simbolos)
     let EtiquetaBegin=generarEtiqueta()
@@ -604,7 +710,7 @@ function ForTo3D(instruccion,TS){
     Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
     Code+= `goto ${EtiquetaNext};\n`
     Code+=`${EtiquetaTrue}:\n`
-    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext) 
+    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj) 
     Array.isArray(instruccion.ExpresionPaso)?TraducirBloque(instruccion.ExpresionPaso,newTS):TraducirBloque([instruccion.ExpresionPaso],newTS) 
     Code+= `goto ${EtiquetaBegin};\n`
     Code+="//Termina traduccion de For\n"
@@ -617,7 +723,7 @@ function ForTo3D(instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function ForOfTo3D(instruccion,TS){
+function ForOfTo3D(instruccion,TS,FunObj){
 
     Code+='//Comienza traduccion de For-Of\n'
 
@@ -655,7 +761,7 @@ function ForOfTo3D(instruccion,TS){
     }
 
             
-    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext) 
+    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj) 
     Code+=`goto ${EtiquetaBegin};\n`
     Code+=`${EtiquetaNext}:\n`
 
@@ -668,7 +774,7 @@ function ForOfTo3D(instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function ForInTo3D(instruccion,TS){
+function ForInTo3D(instruccion,TS,FunObj){
 
     Code+='//Comienza traduccion de For-In\n'
 
@@ -691,7 +797,7 @@ function ForInTo3D(instruccion,TS){
     Code+=`if(${Iterador}>=${length})goto ${EtiquetaNext};\n`
     Code+=`stack[(int)${auxVar.Valor}]=${Iterador};\n`
     
-    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext) 
+    Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj) 
     Code+=`goto ${EtiquetaBegin};\n`
     Code+=`${EtiquetaNext}:\n`
 
@@ -778,7 +884,12 @@ function traducirValor(valor,ts,bool){
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
-        //return CallFunToString(valor);
+        let aux = FunCallTo3D(valor,ts)
+        if(aux.Tipo===Tipo_Valor.NUMBER || aux.Tipo===Tipo_Valor.BOOLEAN){
+            Code+=generarTemporal()+"=p;\n"
+            Code+= `stack[(int)p] = ${aux.Valor};\np=p+1;\n`
+        }
+        return {Valor:getLastTemporal(),Tipo:aux.Tipo}
     }
     else if(valor.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
         //return TernarioToString(valor) 
@@ -844,7 +955,7 @@ function getValor(valor,ts){
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
-        //return CallFunToString(valor);
+        return FunCallTo3D(valor,ts);
     }
     else if(valor.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
         //return TernarioToString(valor) 
@@ -1176,6 +1287,7 @@ function generarEncabezado(){
     let TempTxt = `#include <stdio.h>
 double heap[16384];
 double stack[16394];
+double stackR[16394];
 double p=0;
 double h=0;
 double auxPtr,auxTemp; 
@@ -1192,6 +1304,9 @@ void ToUpperCase();
 void stringLength();
 void concatStringBoolean();
 `
+    if(CodeDec.length!==0){
+        TempTxt+=CodeDec
+    }
     if(ContadorT>0){
         TempTxt+="double ";
         for(let i=0;i<ContadorT;i++){
@@ -1215,8 +1330,12 @@ void main(){
 
 ${Code}
 return;
-}`
+}
 
+`
+    if(CodeFun.length!==0){
+        TempTxt+=CodeFun
+    }
     TempTxt += `
     
 void printString(){
