@@ -167,7 +167,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
                 
             }
             else if(instruccion.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
-                FunCallTo3D(instruccion,TS);
+                FunCallTo3D(instruccion,TS,FunObj);
             }
             else if(instruccion.Tipo===Tipo_Instruccion.SALIDA){
                 ConsoleLogTo3D(instruccion,TS)
@@ -208,7 +208,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
             else if(instruccion.Tipo===Tipo_Instruccion.RETURN){
                 if(FunObj!==undefined){
                     if(instruccion.Valor!==undefined){
-                        let val=getValor(instruccion.Valor,TS)
+                        let val=getValor(instruccion.Valor,TS,FunObj)
                         Code+=`stack[(int)${FunObj.Puntero}]=${val.Valor};\n`
                         Code+=`goto ${FunObj.Etiqueta};\n`
                     }
@@ -334,14 +334,8 @@ function LetDecTo3D (instruccion,TS){
 
     instruccion.ID.forEach((element) => {
         Code+= `//Comienza declaracion de ${element.ID}\n`  
-        if(element.Valor.Tipo!==Tipo_Valor.NULL){   
-            aux=traducirValor(element.Valor,TS)
-            TS.nuevoSimbolo(element.ID,element.Tipo,"LET",aux.Valor,element.Valor.Tipo);
-        }   
-        else{
-            // FALTA CONTROLAR NULLS
-            TS.nuevoSimbolo(element.ID,element.Tipo,"LET",generarTemporal(),undefined);
-        }
+        aux=traducirValor(element.Valor,TS)
+        TS.nuevoSimbolo(element.ID,element.Tipo,"LET",aux.Valor,element.Valor.Tipo);
         Code+= `//Termina declaracion de ${element.ID}\n`
     });
 
@@ -357,14 +351,8 @@ function ConstDecTo3D (instruccion,TS){
 
     instruccion.ID.forEach((element) => {
         Code+= `//Comienza declaracion de ${element.ID}\n`  
-        if(element.Valor.Tipo!==Tipo_Valor.NULL){   
-            aux=traducirValor(element.Valor,TS)
-            TS.nuevoSimbolo(element.ID,element.Tipo,"CONST",aux.Valor,element.Valor.Tipo);
-        }   
-        else{
-            // FALTA CONTROLAR NULLS
-            console.log("dw")
-        }
+        aux=traducirValor(element.Valor,TS)
+        TS.nuevoSimbolo(element.ID,element.Tipo,"CONST",aux.Valor,element.Valor.Tipo);
         Code+= `//Termina declaracion de ${element.ID}\n`
     });
 
@@ -386,19 +374,38 @@ function TypeDecExecute(instruccion,TS){
  * @param {*} ts 
  */
 function AsigTo3D(instruccion,TS){
-    Code+= `//Comienza asignacion de ${instruccion.ID}\n`
-    //Se obtiene variable
-    let auxSimb=TS.getValor(instruccion.ID)
-    let aux=getValor(instruccion.Valor,TS)
-
-    if(auxSimb.Tipo!==Tipo_Valor.NUMBER&&auxSimb.Tipo!==Tipo_Valor.BOOLEAN){
-        Code+= `${auxSimb.Valor}=${aux.Valor};\n` 
-    }  
-    else{   
-    Code+= `stack[(int)${auxSimb.Valor}]=${aux.Valor};\n` 
+    //Si es una asignacion de atributos
+    if(instruccion.ID.OpTipo!==undefined){
+        Code+= `//Comienza asignacion de atributo\n`
+        let auxSimb=TS.getValor(instruccion.ID.OpIzq,TS)
+        let propIndex = getPropIndex(auxSimb.Tipo,instruccion.ID.OpDer,TS)
+        let aux=traducirValor(instruccion.Valor,TS,true)
+        console.log(aux)
+        
+        Code+=`${generarTemporal()}=${auxSimb.Valor}+${propIndex.Index};\n`
+        Code+=`${getLastTemporal()}=${getLastTemporal()}+1;\n`    
+        Code+= `heap[(int)${getLastTemporal()}]=${aux.Valor};\n` 
+        
+        Code+= `//Termina asignacion de atributo\n`
     }
-    
-    Code+= `//Termina asignacion de ${instruccion.ID}\n`
+    else{
+        Code+= `//Comienza asignacion de ${instruccion.ID}\n`
+        //Se obtiene variable
+        let auxSimb=TS.getValor(instruccion.ID)
+        let aux=getValor(instruccion.Valor,TS)
+
+        if(auxSimb.Tipo.includes("ARR")){
+            auxSimb.Valor=aux.Valor
+        }
+        else if(auxSimb.Tipo!==Tipo_Valor.NUMBER && auxSimb.Tipo!==Tipo_Valor.BOOLEAN){
+            Code+= `${auxSimb.Valor}=${aux.Valor};\n` 
+        }  
+        else{   
+            Code+= `stack[(int)${auxSimb.Valor}]=${aux.Valor};\n` 
+        }
+        Code+= `//Termina asignacion de ${instruccion.ID}\n`
+
+    }
     
 }
 
@@ -411,7 +418,7 @@ function AsigArrTo3D(instruccion,TS){
     Code+='//Comienza asignacion en '+instruccion.ID+"\n"
     //Se obtiene referencia al array
     let arr =TS.getValor(instruccion.ID)
-    let val =getValor(instruccion.Valor,TS,true)
+    let val =getValor(instruccion.Valor,TS)
     let pos1,pos2;
     if(instruccion.Posicion2===undefined){
         pos1=getValor(instruccion.Posicion,TS)
@@ -482,25 +489,40 @@ function IncDecTo3D(instruccion,TS){
  * @param {*} instruccion 
  * @param {*} TS 
  */
-function DecFunTo3D(instruccion,TS){
+function DecFunTo3D(instruccion,TS,bool){
 
-    let aux={
-        Parametros:instruccion.Parametros,
-        Instrucciones:instruccion.Instrucciones,
+    let TempFunciones=[]
+    //Se extraen funciones anidadas
+    TempFunciones=_.filter(instruccion.Instrucciones,function(ins) {
+        return ins.Tipo===Tipo_Instruccion.DECL_FUNCION;
+    });
+    //Luego se eliminan
+    _.remove(instruccion.Instrucciones,function(ins) {
+        return ins.Tipo===Tipo_Instruccion.DECL_FUNCION;
+    });
+    if(bool===undefined){
+        GlobalTS.nuevoSimbolo(instruccion.ID,instruccion.TipoRetorno,"FUNCTION",undefined)   
     }
-    GlobalTS.nuevoSimbolo(instruccion.ID,instruccion.TipoRetorno,"FUNCTION",undefined)
+    //Y se traducen funciones anidadas
+    TempFunciones.forEach(element => {
+        GlobalTS.nuevoSimbolo(element.ID,element.TipoRetorno,"FUNCTION",undefined);
+    });
+    
 
     CodeDec+=`void ${instruccion.ID}();\n`
     let functionPtr = generarTemporal();
     let newTS = new TablaSimbolos(TS.simbolos)
     let EtiquetaNext = generarEtiqueta()
     CodeFun+=`void ${instruccion.ID}(){\n\n`
+
+    //CodeFun+=`stackR[(int)r]=p;\n`
     
     let params = instruccion.Parametros
     let paramText=""
     if(params!==undefined){
     //Este string se usa para asignar y reasignar parametros
         paramText+="//Puntero de la funcion\n"
+        //paramText+=`${functionPtr}=stackR[(int)r];\n`
         paramText+=`${functionPtr}=p;\n`
         paramText+="//Comienza declaracion de parametros\n"
         let auxTemp=generarTemporal();
@@ -516,8 +538,6 @@ function DecFunTo3D(instruccion,TS){
 
     //Objeto para las pinches llamadas recursivas
     let auxObj={ID:instruccion.ID,Puntero:functionPtr,AsigTxt:paramText,Etiqueta:EtiquetaNext}
-    //FALTAN DESANIDAMINETO
-
 
     //Se traducen instrucciones
     let auxCode = Code;
@@ -526,7 +546,13 @@ function DecFunTo3D(instruccion,TS){
     CodeFun+=Code
     Code=auxCode;
     CodeFun+=`${EtiquetaNext}:\n`
-    CodeFun+=`return;\n\n}`
+    CodeFun+=`return;\n}\n`
+
+    //Y se traducen funciones anidadas
+    TempFunciones.forEach(element => {
+        DecFunTo3D(element,newTS,false);
+    });
+ 
 
     
 
@@ -537,7 +563,7 @@ function DecFunTo3D(instruccion,TS){
  * @param {*} instruccion 
  * @param {*} TS 
  */
-function FunCallTo3D(instruccion,TS) {
+function FunCallTo3D(instruccion,TS,FunObj) {
     Code+='//Comienza llamada a funcion\n'
     let fun = GlobalTS.getValor(instruccion.ID)
     let functionPtr = generarTemporal();
@@ -562,11 +588,19 @@ function FunCallTo3D(instruccion,TS) {
         });
         Code+='//Termina asignacion de parametros en stack\n'
     }
+    /*if(FunObj!==undefined && FunObj.ID===fun.ID){
+        Code+='//Puntero de la funcion\n'
+        Code+='r=r+1;\n'
+    }*/
     Code+=`${fun.ID}();\n`
     let returnVal=generarTemporal();
     Code+=`${returnVal}=stack[(int)${functionPtr}];\n`
     Code+='//Termina llamada a funcion\n'
-    console.log(fun)
+    /*if(FunObj!==undefined && FunObj.ID===fun.ID){
+        Code+='//Puntero de la funcion\n'
+        Code+='r=r-1;\n'
+        Code+=FunObj.AsigTxt
+    }*/
     return{Valor:returnVal,Tipo:fun.Tipo}
     
 }
@@ -858,8 +892,15 @@ function traducirValor(valor,ts,bool){
                 return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
             }
         }
-        if(valor.Tipo===Tipo_Valor.NEWARR){
+        else if(valor.Tipo===Tipo_Valor.NEWARR){
             return traducirNewArr(valor,ts)
+        }
+        else if(valor.Tipo===Tipo_Valor.NULL){
+            let referencia = generarTemporal();
+            Code+=`${referencia}=h;\n`
+            Code+=`heap[(int)h]=0;\n`
+            Code+='h=h+1;\n'
+            return {Valor:referencia,Tipo:Tipo_Valor.NULL}
         }
         else{
             if(bool){
@@ -913,7 +954,7 @@ function traducirValor(valor,ts,bool){
  * @param {*} tabla de simbolos
  * @returns {*} Objeto {Valor:...,Tipo...}
  */
-function getValor(valor,ts){
+function getValor(valor,ts,FunObj){
     //VALOR PUNTUALES Y UNITARIOS 
     if(valor.Valor!==undefined){
         if(valor.Tipo===Tipo_Valor.STRING){
@@ -936,13 +977,25 @@ function getValor(valor,ts){
             else if(auxSimb.Tipo.includes("ARR")){
                 return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
             }
-            else{
+            else if(auxSimb.Tipo===Tipo_Valor.NUMBER || auxSimb.Tipo===Tipo_Valor.BOOLEAN){
                 Code+= generarTemporal()+`=stack[(int)${auxSimb.Valor}];\n`
                 return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
             }
+            else {   
+                Code+= generarTemporal()+`=${auxSimb.Valor};\n`        
+                //Code+= generarTemporal()+`=heap[(int)${auxSimb.Valor}];\n`
+                return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
+            }
         }
-        if(valor.Tipo===Tipo_Valor.NEWARR){
+        else if(valor.Tipo===Tipo_Valor.NEWARR){
             return traducirNewArr(valor,ts)
+        }
+        else if(valor.Tipo===Tipo_Valor.NULL){
+            let referencia = generarTemporal();
+            Code+=`${referencia}=h;\n`
+            Code+=`heap[(int)h]=0;\n`
+            Code+='h=h+1;\n'
+            return {Valor:referencia,Tipo:Tipo_Valor.NULL}
         }
         else{
             return {Valor:valor.Valor,Tipo:Tipo_Valor.NUMBER}
@@ -958,13 +1011,13 @@ function getValor(valor,ts){
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
-        return FunCallTo3D(valor,ts);
+        return FunCallTo3D(valor,ts,FunObj);
     }
     else if(valor.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
         //return TernarioToString(valor) 
     }
     else if(valor.OpTipo!==undefined){
-        return traducirOperacionBinaria(valor,ts);
+        return traducirOperacionBinaria(valor,ts,FunObj);
     }
     else{
         return ts.getValor(valor)
@@ -977,13 +1030,13 @@ function getValor(valor,ts){
  * @param {*} valor Expresion a traducir
  * @param {*} txt String donde concatenara
  */
-function traducirOperacionBinaria(valor,ts){
+function traducirOperacionBinaria(valor,ts,FunObj){
 
 
-    let OpIzq=getValor(valor.OpIzq,ts)
+    let OpIzq=getValor(valor.OpIzq,ts,FunObj)
     let OpDer
     if(valor.OpDer!==undefined&&valor.OpTipo!==Tipo_Operacion.ATRIBUTO){
-    OpDer=getValor(valor.OpDer,ts)
+    OpDer=getValor(valor.OpDer,ts,FunObj)
     }
     
     switch(valor.OpTipo){
@@ -1079,6 +1132,39 @@ function traducirOperacionBinaria(valor,ts){
                 Code+= `auxNum2=${OpDer.Valor};\n`
                 Code+= `compareStrings();\n`
                 Code+= generarTemporal()+"=auxNum5;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //TYPE-TYPE
+            //ARRAY-ARRAY
+            if(OpIzq.Tipo.includes("ARR") && OpDer.Tipo.includes("ARR")) {
+                Code+= `${generarTemporal()}=${OpIzq.Valor}==${OpDer.Valor};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //ARRAY-NULL
+            if(OpIzq.Tipo.includes("ARR") && OpDer.Tipo===Tipo_Valor.NULL){
+                let aux=generarTemporal()
+                let aux2=generarTemporal()
+                Code+= `${aux}=heap[(int)${OpIzq.Valor}];\n`
+                Code+= `${aux2}=heap[(int)${OpDer.Valor}];\n`
+                Code+= `${generarTemporal()}=${aux}==${aux2};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //STRING-NULL
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.NULL){
+                let aux=generarTemporal()
+                let aux2=generarTemporal()
+                Code+= `${aux}=heap[(int)${OpIzq.Valor}];\n`
+                Code+= `${aux2}=heap[(int)${OpDer.Valor}];\n`
+                Code+= `${generarTemporal()}=${aux}==${aux2};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //TYPE-NULL
+            if(OpIzq.Tipo!==undefined && OpDer.Tipo===Tipo_Valor.NULL){
+                let aux=generarTemporal()
+                let aux2=generarTemporal()
+                Code+= `${aux}=heap[(int)${OpIzq.Valor}];\n`
+                Code+= `${aux2}=heap[(int)${OpDer.Valor}];\n`
+                Code+= `${generarTemporal()}=${aux}==${aux2};\n`
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
             return getLastTemporal()
@@ -1273,6 +1359,7 @@ function traducirArray(valor,ts){
  * @param {*} valor Valor del string a traducir
  */
 function traducirString(valor){
+    valor = procesarCadena(valor)
     Code+= generarTemporal()+"=h;\n"
     Array.from(valor).forEach(element => {
         Code+= `heap[(int)h] = ${element.charCodeAt(0)};\nh=h+1;\n`
@@ -1294,11 +1381,23 @@ function getPropIndex(type,prop,ts){
     let aux2;
     aux[0].Valor.forEach((element,index)=>{
         if(element.ID===prop){
-            console.log(index)
             aux2={Index:index,Tipo:element.Tipo}
         }
     });
     return aux2;
+}
+
+/**
+ * Da formato de cadena 
+ * @param {*} valor 
+ */
+function procesarCadena(valor){
+    valor= String(valor).replaceAll(/\\n/g,'\n4')
+    valor= String(valor).replaceAll(/\\r/g,'\r')
+    valor= String(valor).replaceAll(/\\t/g,'\t')
+    valor= String(valor).replaceAll(/\\\\/g,'\\')
+    valor= String(valor).replaceAll(/\\"/g,"\"")
+    return valor
 }
 
 // FUNCIONES GENERADORAS 
@@ -1337,6 +1436,7 @@ double stack[16394];
 double stackR[16394];
 double p=0;
 double h=0;
+double r=0;
 double auxPtr,auxTemp; 
 double auxNum1,auxNum2,auxNum3,auxNum4,auxNum5; 
 void printString();
