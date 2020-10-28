@@ -20,7 +20,7 @@ import Popper from 'popper.js';
 import 'bootstrap/dist/js/bootstrap.bundle.min';
 
 //Importaciones de funciones de JS
-import {setCode, Simbolos, Simbolos2} from './scripts/mainScript.js'
+import {setCode, Simbolos} from './scripts/mainScript.js'
 import {setLC} from './scripts/mainScript.js'
 import {setViewer} from './scripts/mainScript.js'
 import {setConsole} from './scripts/mainScript.js'
@@ -146,7 +146,6 @@ function MainComponent(){
       </div>
 
       <TablaSimbolos Arr={Simbolos} Title="Traduccion"></TablaSimbolos>
-      <TablaSimbolos Arr={Simbolos2} Title="Ejecucion"></TablaSimbolos>
       <TreeView></TreeView>
 
 

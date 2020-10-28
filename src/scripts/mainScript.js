@@ -1,11 +1,13 @@
 import {Traducir, ReturnAST} from '../Compilador/Traductor.js';
+import {start} from '../Compilador/Optimizador'
 const parser = require('../Compilador/Gramatica.js').parser;
+
 
 let ErroresSintacticos=[];
 export let CodeTxt="",TraduccionTxt="";
 export let Viewer,Console
 export let Simbolos=[]
-export let Simbolos2=[]
+export let Optimizaciones=[]
 export let AST,ASTData
 
 parser.yy.parseError = function(msg, hash) {
@@ -52,7 +54,7 @@ export function translate(){
     }
 }
 export function optimize(){
-    
+    start() 
 }
 
 function refreshErrores(){

@@ -1,13 +1,13 @@
 import { Tipo_Instruccion } from './Instrucciones.js';
 import { Tipo_Operacion } from './Instrucciones.js';
 import { Tipo_Valor } from './Instrucciones.js';
-import {Simbolos, CodeTxt, Console} from '../scripts/mainScript.js'
-import { param } from 'jquery';
+import {Simbolos, Console} from '../scripts/mainScript.js'
 
 const _ = require('lodash')
 
 //AST modificado que se regresara si hay funciones anidadas
-let AST,Code,CodeFun,CodeDec;
+let AST,CodeDec;
+export let Code,CodeFun
 let ContadorT,ContadorL,ContadorA,ContadorB
 let GlobalTS
 
@@ -53,7 +53,7 @@ class TablaSimbolos {
             return simb.ID===id;
         });
         if(simbolo.length===0){
-            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION||tipo2===Tipo_Valor.NEWARR){
+            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION||tipo2===Tipo_Instruccion.BLOQUE_TERNARIO||tipo2===Tipo_Valor.NEWARR){
                 this.simbolos.push(crearSimbolo(id,tipo,valor,rol));
             }
             else{
@@ -124,10 +124,13 @@ export function Traducir (Instrucciones){
     ContadorL=0
     ContadorA=0;
     ContadorB=0;
+    Console.setValue("")
     AST=JSON.parse(JSON.stringify(Instrucciones))
     //BuscarDec(AST,GlobalTS)
     TraducirBloque(AST,GlobalTS)
+    Simbolos.push(GlobalTS.simbolos)
     console.log(GlobalTS)
+    console.log(Code+CodeFun)
     return generarEncabezado()
 }
 
@@ -228,7 +231,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
             }
         }
         catch(e){
-            console.error(e.message)
+            Console.setValue(Console.getValue()+"[ERROR]:\t"+e.message+"\n")
         }
     });
 }
@@ -392,6 +395,9 @@ function AsigTo3D(instruccion,TS){
         Code+= `//Comienza asignacion de ${instruccion.ID}\n`
         //Se obtiene variable
         let auxSimb=TS.getValor(instruccion.ID)
+        if(auxSimb.Rol==="CONST"){
+            throw Error("No se puede asignar constante "+auxSimb.ID)
+        }
         let aux=getValor(instruccion.Valor,TS)
 
         if(auxSimb.Tipo.includes("ARR")){
@@ -671,6 +677,40 @@ function SwitchTo3D(instruccion,ts,EtBegin,FunObj){
     Code+='//Termina traduccion de Switch\n'
 }
 
+/**
+ * Traduce operador ternario a 3D
+ * @param {*} instruccion 
+ * @param {*} ts 
+ */
+function TernarioTo3D(instruccion,ts,bool){
+
+    let aux = getValor(instruccion.ExpresionLogica,ts)
+    let val = generarTemporal();
+    let valTrue=traducirValor(instruccion.InstruccionesIf);
+    let EtiquetaTrue=generarEtiqueta()
+    let valFalse=traducirValor(instruccion.InstruccionesElse);
+    let EtiquetaFalse=generarEtiqueta();
+    let EtiquetaNext=generarEtiqueta()
+    Code+="//Comienza traduccion de Ternario \n"
+    Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
+    Code+= `goto ${EtiquetaFalse};\n`
+
+    Code+=`${EtiquetaTrue}:\n`
+    Code+=`${val}=${valTrue.Valor};\n`
+    Code+=`goto ${EtiquetaNext};\n`
+
+    Code+=`${EtiquetaFalse}:\n`
+    Code+=`${val}=${valFalse.Valor};\n`
+    Code+=`goto ${EtiquetaNext};\n`
+
+    Code+=`${EtiquetaNext}:\n`
+
+    Code+="//Termina traduccion de Ternario \n"
+
+    return {Valor:val,Tipo:undefined}
+
+}
+
 
 // CICLOS
 
@@ -933,7 +973,7 @@ function traducirValor(valor,ts,bool){
         return {Valor:getLastTemporal(),Tipo:aux.Tipo}
     }
     else if(valor.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
-        //return TernarioToString(valor) 
+        return TernarioTo3D(valor,ts,bool) 
     }
     else if(valor.OpTipo!==undefined){
         let aux = traducirOperacionBinaria(valor,ts)
@@ -1014,7 +1054,7 @@ function getValor(valor,ts,FunObj){
         return FunCallTo3D(valor,ts,FunObj);
     }
     else if(valor.Tipo===Tipo_Instruccion.BLOQUE_TERNARIO){
-        //return TernarioToString(valor) 
+        return TernarioTo3D(valor,ts)  
     }
     else if(valor.OpTipo!==undefined){
         return traducirOperacionBinaria(valor,ts,FunObj);
@@ -1134,7 +1174,6 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                 Code+= generarTemporal()+"=auxNum5;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
-            //TYPE-TYPE
             //ARRAY-ARRAY
             if(OpIzq.Tipo.includes("ARR") && OpDer.Tipo.includes("ARR")) {
                 Code+= `${generarTemporal()}=${OpIzq.Valor}==${OpDer.Valor};\n`
@@ -1167,6 +1206,15 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                 Code+= `${generarTemporal()}=${aux}==${aux2};\n`
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
+            //TYPE-TYPE
+            if(OpIzq.Tipo!==undefined && OpDer.Tipo!==undefined){
+                if(OpIzq.Tipo===OpDer.Tipo){
+                    return {Valor:1,Tipo:Tipo_Valor.BOOLEAN}
+                }
+                else{
+                    return {Valor:0,Tipo:Tipo_Valor.BOOLEAN}
+                }
+            }
             return getLastTemporal()
         case Tipo_Operacion.NO_IGUAL:
             //NUMBER-NUMBER
@@ -1186,6 +1234,47 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                 Code+= `compareStrings();\n`
                 Code+= generarTemporal()+"=!auxNum5;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //ARRAY-ARRAY
+            if(OpIzq.Tipo.includes("ARR") && OpDer.Tipo.includes("ARR")) {
+                Code+= `${generarTemporal()}=${OpIzq.Valor}!=${OpDer.Valor};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //ARRAY-NULL
+            if(OpIzq.Tipo.includes("ARR") && OpDer.Tipo===Tipo_Valor.NULL){
+                let aux=generarTemporal()
+                let aux2=generarTemporal()
+                Code+= `${aux}=heap[(int)${OpIzq.Valor}];\n`
+                Code+= `${aux2}=heap[(int)${OpDer.Valor}];\n`
+                Code+= `${generarTemporal()}=${aux}!=${aux2};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //STRING-NULL
+            if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.NULL){
+                let aux=generarTemporal()
+                let aux2=generarTemporal()
+                Code+= `${aux}=heap[(int)${OpIzq.Valor}];\n`
+                Code+= `${aux2}=heap[(int)${OpDer.Valor}];\n`
+                Code+= `${generarTemporal()}=${aux}!=${aux2};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //TYPE-NULL
+            if(OpIzq.Tipo!==undefined && OpDer.Tipo===Tipo_Valor.NULL){
+                let aux=generarTemporal()
+                let aux2=generarTemporal()
+                Code+= `${aux}=heap[(int)${OpIzq.Valor}];\n`
+                Code+= `${aux2}=heap[(int)${OpDer.Valor}];\n`
+                Code+= `${generarTemporal()}=${aux}!=${aux2};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+            }
+            //TYPE-TYPE
+            if(OpIzq.Tipo!==undefined && OpDer.Tipo!==undefined){
+                if(OpIzq.Tipo===OpDer.Tipo){
+                    return {Valor:0,Tipo:Tipo_Valor.BOOLEAN}
+                }
+                else{
+                    return {Valor:1,Tipo:Tipo_Valor.BOOLEAN}
+                }
             }
             return getLastTemporal()
         case Tipo_Operacion.AND:
