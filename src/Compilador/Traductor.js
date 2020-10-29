@@ -134,9 +134,6 @@ export function Traducir (Instrucciones){
     return generarEncabezado()
 }
 
-export function ReturnAST(){
-    return AST
-}
 
 function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
 
@@ -1624,17 +1621,17 @@ void potencia(){
 
     auxNum4=1;
     auxNum3=auxNum1;
-    R0:
-    if(auxNum4<auxNum2) goto R1;
-    goto R2;
+    L0:
+    if(auxNum4<auxNum2) goto L1;
+    goto L2;
     
-    R1:
+    L1:
     auxNum3 = auxNum3*auxNum1;
     auxNum4 = auxNum4+1;
-    goto R0;
+    goto L0;
     
-    R2:
-    return ;
+    L2:
+    return;
 }
 void concatStrings(){
     auxNum4=h;

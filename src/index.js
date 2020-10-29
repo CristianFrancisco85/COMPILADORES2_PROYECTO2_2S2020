@@ -20,13 +20,14 @@ import Popper from 'popper.js';
 import 'bootstrap/dist/js/bootstrap.bundle.min';
 
 //Importaciones de funciones de JS
-import {setCode, Simbolos} from './scripts/mainScript.js'
+import {setCode, Simbolos,Optimizaciones} from './scripts/mainScript.js'
 import {setLC} from './scripts/mainScript.js'
 import {setViewer} from './scripts/mainScript.js'
 import {setConsole} from './scripts/mainScript.js'
 import {translate} from './scripts/mainScript.js'
 import {optimize} from './scripts/mainScript.js'
 import TablaSimbolos from './components/TablaSimbolos/TablaSimbolos';
+import TablaOptimizaciones from './components/Optimizaciones/TablaOptimizaciones';
 import TreeView from './components/TreeView/TreeView';
 
 
@@ -146,6 +147,7 @@ function MainComponent(){
       </div>
 
       <TablaSimbolos Arr={Simbolos} Title="Traduccion"></TablaSimbolos>
+      <TablaOptimizaciones Arr={Optimizaciones}></TablaOptimizaciones>
       <TreeView></TreeView>
 
 

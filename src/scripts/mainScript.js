@@ -1,4 +1,4 @@
-import {Traducir, ReturnAST} from '../Compilador/Traductor.js';
+import {Traducir} from '../Compilador/Traductor.js';
 import {start} from '../Compilador/Optimizador'
 const parser = require('../Compilador/Gramatica.js').parser;
 
@@ -40,7 +40,6 @@ export function translate(){
         //Salida de Traduccion
         TraduccionTxt=Traducir(JSON.parse(JSON.stringify(AST.AST)));
         Viewer.setValue(TraduccionTxt)
-        //AST.AST=ReturnAST()
         console.log(JSON.stringify(AST,null,2));
     } 
     catch (e) {
@@ -48,13 +47,15 @@ export function translate(){
     }
     finally{
         if(AST!==undefined){
-        ASTData=AST.AST
+            ASTData=AST.AST
         }
         refreshErrores()
     }
 }
 export function optimize(){
-    start() 
+    TraduccionTxt=Viewer.getValue()
+    TraduccionTxt= start() 
+    Viewer.setValue(TraduccionTxt)
 }
 
 function refreshErrores(){
