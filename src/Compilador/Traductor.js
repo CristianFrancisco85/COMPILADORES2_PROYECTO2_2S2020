@@ -7,7 +7,7 @@ const _ = require('lodash')
 
 //AST modificado que se regresara si hay funciones anidadas
 let AST,CodeDec;
-export let Code,CodeFun
+export let Code,CodeFun,myfuns
 let ContadorT,ContadorL,ContadorA,ContadorB
 let GlobalTS
 
@@ -299,10 +299,10 @@ function ConsoleLogTo3D(instruccion,TS){
             }
         }
         else if(instruccion.Valor.Tipo===Tipo_Valor.BOOLEAN){
-            Code+=`printf("${instruccion.Valor.Valor}");printf("\\n");\n`
+            Code+=`printf("${instruccion.Valor.Valor}");\nprintf("\\n");\n`
         }
         else{
-            Code+=`printf("%f", (double)${instruccion.Valor.Valor});printf("\\n");\n`
+            Code+=`printf("%f", (double)${instruccion.Valor.Valor});\nprintf("\\n");\n`
         }
     }
     else{
@@ -616,15 +616,16 @@ function FunCallTo3D(instruccion,TS,FunObj) {
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
 function IfTo3D (instruccion,TS,EtBegin,EtNext,FunObj){
+    Code+="//Comienza traduccion de IF \n"
     let newTS = new TablaSimbolos(TS.simbolos)
     let aux = getValor(instruccion.ExpresionLogica,TS)
     let EtiquetaTrue=generarEtiqueta()
     let EtiquetaFalse=generarEtiqueta();
     let EtiquetaNext=generarEtiqueta()
 
-    Code+="//Comienza traduccion de IF \n"
     Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
     Code+= `goto ${EtiquetaFalse};\n`
+    
 
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.InstruccionesIf)?TraducirBloque(instruccion.InstruccionesIf,newTS,EtBegin,EtNext,FunObj):TraducirBloque([instruccion.InstruccionesIf],newTS,EtBegin,EtNext,FunObj)
@@ -633,12 +634,10 @@ function IfTo3D (instruccion,TS,EtBegin,EtNext,FunObj){
     Code+=`${EtiquetaFalse}:\n`
     if(instruccion.InstruccionesElse!==undefined){
         Array.isArray(instruccion.InstruccionesElse)?TraducirBloque(instruccion.InstruccionesElse,newTS,EtBegin,EtNext,FunObj):TraducirBloque([instruccion.InstruccionesElse],newTS,EtBegin,EtNext,FunObj)
+        Code+=`goto ${EtiquetaNext};\n`
     }
-    Code+=`goto ${EtiquetaNext};\n`
-
-    Code+="//Termina traduccion de IF\n"
-
     Code+=`${EtiquetaNext}:\n`
+    Code+="//Termina traduccion de IF\n"
     
 }
 
@@ -680,7 +679,7 @@ function SwitchTo3D(instruccion,ts,EtBegin,FunObj){
  * @param {*} ts 
  */
 function TernarioTo3D(instruccion,ts,bool){
-
+    Code+="//Comienza traduccion de Ternario \n"
     let aux = getValor(instruccion.ExpresionLogica,ts)
     let val = generarTemporal();
     let valTrue=traducirValor(instruccion.InstruccionesIf);
@@ -688,7 +687,7 @@ function TernarioTo3D(instruccion,ts,bool){
     let valFalse=traducirValor(instruccion.InstruccionesElse);
     let EtiquetaFalse=generarEtiqueta();
     let EtiquetaNext=generarEtiqueta()
-    Code+="//Comienza traduccion de Ternario \n"
+    
     Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
     Code+= `goto ${EtiquetaFalse};\n`
 
@@ -732,10 +731,8 @@ function WhileTo3D(instruccion,TS,FunObj){
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj)
     Code+=`goto ${EtiquetaBegin};\n`
-
-    Code+="//Termina traduccion de While\n"
-
     Code+=`${EtiquetaNext}:\n`
+    Code+="//Termina traduccion de While\n"
 
 }
 
@@ -757,9 +754,9 @@ function DoWhileTo3D(instruccion,TS,FunObj){
     let aux = getValor(instruccion.ExpresionLogica,TS)
     Code+= `if (${aux.Valor}) goto ${EtiquetaBegin};\n`
     Code+= `goto ${EtiquetaNext};\n`
-    Code+="//Termina traduccion de Do-While\n"
 
     Code+=`${EtiquetaNext}:\n`
+    Code+="//Termina traduccion de Do-While\n"
 
 }
 
@@ -784,8 +781,8 @@ function ForTo3D(instruccion,TS,FunObj){
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj) 
     Array.isArray(instruccion.ExpresionPaso)?TraducirBloque(instruccion.ExpresionPaso,newTS):TraducirBloque([instruccion.ExpresionPaso],newTS) 
     Code+= `goto ${EtiquetaBegin};\n`
-    Code+="//Termina traduccion de For\n"
     Code+=`${EtiquetaNext}:\n`
+    Code+="//Termina traduccion de For\n"
 
 }
 
@@ -1097,6 +1094,11 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                 Code+= generarTemporal()+"="+OpIzq.Valor+"+"+OpDer.Valor+";\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
             }
+            //BOOLEAN-NUMBER
+            if(OpIzq.Tipo===Tipo_Valor.BOOLEAN && OpDer.Tipo===Tipo_Valor.NUMBER){
+                Code+= generarTemporal()+"="+OpIzq.Valor+"+"+OpDer.Valor+";\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.NUMBER}
+            }
             //STRING-STRING
             if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.STRING){
                 Code+= `auxNum1=${OpIzq.Valor};\n`
@@ -1113,11 +1115,27 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                 Code+= generarTemporal()+"=auxNum4;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
             }
+            //NUMBER-STRING
+            if(OpIzq.Tipo===Tipo_Valor.NUMBER && OpDer.Tipo===Tipo_Valor.STRING){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `concatNumberString();\n`
+                Code+= generarTemporal()+"=auxNum4;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+            }
             //STRING-BOOLEAN
             if(OpIzq.Tipo===Tipo_Valor.STRING && OpDer.Tipo===Tipo_Valor.BOOLEAN){
                 Code+= `auxNum1=${OpIzq.Valor};\n`
                 Code+= `auxNum2=${OpDer.Valor};\n`
                 Code+= `concatStringBoolean();\n`
+                Code+= generarTemporal()+"=auxNum4;\n"
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
+            }
+            //BOOLEAN-STRING
+            if(OpIzq.Tipo===Tipo_Valor.BOOLEAN && OpDer.Tipo===Tipo_Valor.STRING){
+                Code+= `auxNum1=${OpIzq.Valor};\n`
+                Code+= `auxNum2=${OpDer.Valor};\n`
+                Code+= `concatBooleanString();\n`
                 Code+= generarTemporal()+"=auxNum4;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
             }
@@ -1531,12 +1549,14 @@ void printBoolean();
 void potencia();
 void concatStrings();
 void concatStringNumber();
+void concatNumberString();
 void compareStrings();
 void ToLowerCase();
 void ToUpperCase();
 void stringLength();
 void charAt();
 void concatStringBoolean();
+void concatBooleanString();
 `
     if(CodeDec.length!==0){
         TempTxt+=CodeDec
@@ -1570,7 +1590,11 @@ return;
     if(CodeFun.length!==0){
         TempTxt+=CodeFun
     }
-    TempTxt += `
+    TempTxt += myfuns
+    return TempTxt
+}
+
+myfuns=`
     
 void printString(){
 
@@ -1680,6 +1704,31 @@ void concatStringNumber(){
     heap[(int)h]=auxNum2;
     h=h+1;
     goto L4;
+    
+    L4:
+    heap[(int)h]=-1;
+    h=h+1;
+    return;
+    
+}
+void concatNumberString(){
+    auxNum4=h;
+    
+    L2:
+    if(auxNum1>=-1) auxNum1=auxNum1+200;
+    heap[(int)h]=auxNum1;
+    h=h+1;
+    goto L0;
+    
+    L0:
+    auxNum3=heap[(int)auxNum2];
+    if(auxNum3!=-1)goto L1;
+    goto L4;
+    L1: 
+    heap[(int)h]=auxNum3;
+    h=h+1;
+    auxNum2=auxNum2+1;
+    goto L0;
     
     L4:
     heap[(int)h]=-1;
@@ -1838,6 +1887,51 @@ void concatStringBoolean(){
     goto L5;
 
     L5:
+    return;
+
+}
+void concatBooleanString(){
+    auxNum4=h;
+    
+    L2:
+    if(auxNum1==0)goto L3;
+    goto L4;
+    
+    L3: 
+    heap[(int)h] = 102;
+    h=h+1;
+    heap[(int)h] = 97;
+    h=h+1;
+    heap[(int)h] = 108;
+    h=h+1;
+    heap[(int)h] = 115;
+    h=h+1;
+    heap[(int)h] = 101;
+    h=h+1;
+    goto L0;
+    
+    L4:
+    heap[(int)h] = 116;
+    h=h+1;
+    heap[(int)h] = 114;
+    h=h+1;
+    heap[(int)h] = 117;
+    h=h+1;
+    heap[(int)h] = 101;
+    h=h+1;
+    goto L0;
+    
+    L0:
+    auxNum3=heap[(int)auxNum2];
+    if(auxNum3!=-1)goto L1;
+    goto L5;
+    L1: 
+    heap[(int)h]=auxNum3;
+    h=h+1;
+    auxNum2=auxNum2+1;
+    goto L0;
+
+    L5:
     heap[(int)h]=-1;
     h=h+1;
     return;
@@ -1845,7 +1939,3 @@ void concatStringBoolean(){
 }
 
 `
-
-    return TempTxt
-
-}

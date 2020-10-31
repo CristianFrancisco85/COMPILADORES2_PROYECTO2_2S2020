@@ -1,11 +1,13 @@
 import {Optimizaciones,TraduccionTxt} from '../scripts/mainScript.js'
+import {myfuns} from './Traductor'
 
 const _ = require('lodash')
 let optimizacionesArr=[]
 
 export function start(){
 
-    let result=optimize(TraduccionTxt)
+    let tempText= TraduccionTxt.replace(myfuns,"")
+    let result=optimize(tempText)
     Optimizaciones.push(optimizacionesArr)
     return result
 }
@@ -18,8 +20,10 @@ export function start(){
 function optimize(code){
 
     let StringArr=code.split("\n")
+
     algebraicaReduccion(StringArr)
     codigoMuerto(StringArr)
+    redundancia(StringArr)
 
     return StringArr.join("\n")
 }
@@ -180,52 +184,150 @@ function codigoMuerto(arr){
 
     let temp,aux
     for(let i=0;i<arr.length;i++){
-        temp=String(arr[i])
-
         //Regla 1
+        temp=String(arr[i])
         //Se buscan instrucciones de la forma goto L[0-9]+;
         aux=/^\s*goto (?<etiqueta>L[0-9]+);$/.exec(temp)
         if(aux){
+            //Si no pertenece a un salto condicional
+            if(!(/^\s*if (?<temp>t[0-9]+) goto (?<etiqueta>L[0-9]+);$/.exec(String(arr[i-1])))){
+                let temp2,aux2
+                for(let j=i+1;j<arr.length;j++){
+                    temp2=String(arr[j])
+                    //Se buscan etiquetas L[0-9]+
+                    aux2=/^\s*(?<etiqueta>L[0-9]+):$/.exec(temp2)
+                    if(aux2){
+                        //Si se encontro la etiqueta del salto
+                        if(aux.groups.etiqueta===aux2.groups.etiqueta&&j!==i+1){
+                            //Codigo eliminado
+                            let tempStr
+                            tempStr=_.filter(arr,function(value,index) {
+                                return (index >= i+1 && index <= j-1);
+                            }); 
+                            tempStr=tempStr.join("\n")
+                            //Se elimina desde i+1 a j-1
+                            _.remove(arr, function(value,index) {
+                                return (index >= i+1 && index <= j-1);
+                            }); 
+                            let auxObj ={
+                                Tipo:"Bloques",
+                                Regla:"Regla 1",
+                                CodeE:tempStr,
+                                CodeA:"-",
+                                Fila: i+1
+                            } 
+                            optimizacionesArr.push(auxObj)
+
+                        }
+                        //Si no es igual se aborta optimizacion
+                        else{
+                            break;
+                        }
+
+                    }
+
+                }
+            }
+        }
+
+        //Regla 3 
+        temp=String(arr[i])
+        //Se buscan instrucciones de la forma if (t[0-9]+) goto L[0-9];
+        aux=/^\s*if \((?<temp>t[0-9]+)\) goto (?<etiqueta>L[0-9]+);$/.exec(temp)
+        if(aux){
             let temp2,aux2
-            for(let j=i+1;j<arr.length;j++){
-                temp2=String(arr[j])
-                //Se buscan etiquetas L[0-9]+
-                aux2=/^\s*(?<etiqueta>L[0-9]+):$/.exec(temp2)
-                if(aux2){
-                    //Si se encontro la etiqueta del salto
-                    if(aux.groups.etiqueta===aux2.groups.etiqueta){
-                        //Se elimina desde i+1 a j-1
+            temp2=String(arr[i-1])
+            //Se busca instruccion de la forma t[0-9]+=[0-9]+ op [0-9]+;
+            aux2=/(?<temp1>t[0-9]+)=(?<temp2>t[0-9]+)(?<op>[+*/-])(?<num>[0-9]+);/.exec(temp2)
+        }
+
+        //Regla 4
+
+        //Regla 2
+        temp=String(arr[i])
+        //Se buscan instrucciones de la forma if (t[0-9]+) goto L[0-9];
+        aux=/^\s*if \((?<temp>t[0-9]+)\) goto (?<etiqueta>L[0-9]+);$/.exec(temp)
+        if(aux){
+            let temp2,aux2
+            temp2=String(arr[i+1])
+            //Se busca etiqueta goto L[0-9]+
+            aux2=/^\s*goto (?<etiqueta>L[0-9]+);$/.exec(temp2)
+            if(aux2){
+                let temp3,aux3
+                temp3=String(arr[i+2])
+                //Se busca etiqueta L[0-9]+
+                aux3=/^\s*(?<etiqueta>L[0-9]+):$/.exec(temp3)
+                if(aux3){
+                    if(aux3.groups.etiqueta===aux.groups.etiqueta){
+                        //Codigo Eliminado
                         let tempStr
                         tempStr=_.filter(arr,function(value,index) {
-                            return (index >= i+1 && index <= j-1);
+                            return (index >= i && index <= i+2);
                         }); 
                         tempStr=tempStr.join("\n")
+
+                        //Se cambia salto condicional
+                        arr[i]=arr[i].replace(aux.groups.etiqueta,aux2.groups.etiqueta)
+                        arr[i]=arr[i].replace(aux.groups.temp,"!"+aux.groups.temp)
+                        //Se remueve desde i+1 a i+2
                         _.remove(arr, function(value,index) {
-                            return (index >= i+1 && index <= j-1);
+                            return (index >= i+1 && index <= i+2);
                         }); 
+                        temp=String(arr[i])
                         let auxObj ={
                             Tipo:"Bloques",
-                            Regla:"Regla 1",
+                            Regla:"Regla 2",
                             CodeE:tempStr,
-                            CodeA:"-",
+                            CodeA:temp,
                             Fila: i+1
                         } 
                         optimizacionesArr.push(auxObj)
 
                     }
-                    //Si no es igual se aborta optimizacion
-                    else{
-                        break;
-                    }
-
                 }
-
             }
-
         }
 
 
+    }
 
+}
+
+/**
+ * Realiza optimizaciones de eliminacion de redundacias
+ * @param {*} arr 
+ */
+function redundancia(arr){
+    let temp,aux
+    for(let i=0;i<arr.length;i++){
+        //Regla 5
+        temp=String(arr[i])
+        //Se busca instruccion de la forma t[0-9]+=t[0-9];
+        aux=/(?<temp1>t[0-9]+)=(?<temp2>t[0-9]+);/.exec(temp)
+        if(aux){
+            let temp2,aux2
+            temp2=String(arr[i+1])
+            //Se busca instruccion de la forma t[0-9]+=t[0-9];
+            aux2=/(?<temp1>t[0-9]+)=(?<temp2>t[0-9]+);/.exec(temp2)
+            if(aux2){
+                if((aux.groups.temp1===aux2.groups.temp2)&&(aux.groups.temp2===aux2.groups.temp1)){
+                    //Se remueve desde i+1 
+                    _.remove(arr, function(value,index) {
+                        return index >= i+1;
+                    }); 
+                    temp=String(arr[i])
+                    let auxObj ={
+                        Tipo:"Bloques",
+                        Regla:"Regla 2",
+                        CodeE:temp2,
+                        CodeA:"-",
+                        Fila: i+1
+                    } 
+                    optimizacionesArr.push(auxObj)
+                }
+
+            }
+        }
     }
 
 }

@@ -1,4 +1,4 @@
-import {Traducir} from '../Compilador/Traductor.js';
+import {Traducir,myfuns} from '../Compilador/Traductor.js';
 import {start} from '../Compilador/Optimizador'
 const parser = require('../Compilador/Gramatica.js').parser;
 
@@ -55,7 +55,7 @@ export function translate(){
 export function optimize(){
     TraduccionTxt=Viewer.getValue()
     TraduccionTxt= start() 
-    Viewer.setValue(TraduccionTxt)
+    Viewer.setValue(TraduccionTxt+myfuns)
 }
 
 function refreshErrores(){
