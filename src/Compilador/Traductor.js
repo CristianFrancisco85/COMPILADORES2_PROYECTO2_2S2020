@@ -228,6 +228,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
             }
         }
         catch(e){
+            console.log(e)
             Console.setValue(Console.getValue()+"[ERROR]:\t"+e.message+"\n")
         }
     });
@@ -278,7 +279,8 @@ function BuscarDec(Instrucciones,TablaSimbolos){
 function ConsoleLogTo3D(instruccion,TS){
     if(instruccion.Valor.Valor!==undefined){
         if(instruccion.Valor.Tipo===Tipo_Valor.STRING){
-            Array.from(instruccion.Valor.Valor).forEach(element => {
+            let aux=procesarCadena(instruccion.Valor.Valor)
+            Array.from(aux).forEach(element => {
                 Code+=`printf("%c", (char)${element.charCodeAt(0)});\n`
             });
             Code+=`printf("\\n");\n`
@@ -402,7 +404,7 @@ function AsigTo3D(instruccion,TS){
         }
         else if(auxSimb.Tipo!==Tipo_Valor.NUMBER && auxSimb.Tipo!==Tipo_Valor.BOOLEAN){
             Code+= `${auxSimb.Valor}=${aux.Valor};\n` 
-        }  
+        } 
         else{   
             Code+= `stack[(int)${auxSimb.Valor}]=${aux.Valor};\n` 
         }
@@ -518,15 +520,15 @@ function DecFunTo3D(instruccion,TS,bool){
     let EtiquetaNext = generarEtiqueta()
     CodeFun+=`void ${instruccion.ID}(){\n\n`
 
-    //CodeFun+=`stackR[(int)r]=p;\n`
+    CodeFun+=`stackR[(int)r]=p;\n`
     
     let params = instruccion.Parametros
     let paramText=""
     if(params!==undefined){
     //Este string se usa para asignar y reasignar parametros
         paramText+="//Puntero de la funcion\n"
-        //paramText+=`${functionPtr}=stackR[(int)r];\n`
-        paramText+=`${functionPtr}=p;\n`
+        paramText+=`${functionPtr}=stackR[(int)r];\n`
+        //paramText+=`${functionPtr}=p;\n`
         paramText+="//Comienza declaracion de parametros\n"
         let auxTemp=generarTemporal();
         params.forEach((element,index)=>{
@@ -535,6 +537,7 @@ function DecFunTo3D(instruccion,TS,bool){
             paramText+=`${generarTemporal()}=stack[(int)${auxTemp}];\n`
             newTS.nuevoSimbolo(element.ID,element.Tipo,"LET",getLastTemporal(),undefined);
         });
+        paramText+='p=p+1;\n'
         paramText+="//Termina declaracion de parametros\n"
         CodeFun+=paramText
     }
@@ -591,19 +594,19 @@ function FunCallTo3D(instruccion,TS,FunObj) {
         });
         Code+='//Termina asignacion de parametros en stack\n'
     }
-    /*if(FunObj!==undefined && FunObj.ID===fun.ID){
+    if(FunObj!==undefined && FunObj.ID===fun.ID){
         Code+='//Puntero de la funcion\n'
         Code+='r=r+1;\n'
-    }*/
+    }
     Code+=`${fun.ID}();\n`
     let returnVal=generarTemporal();
     Code+=`${returnVal}=stack[(int)${functionPtr}];\n`
     Code+='//Termina llamada a funcion\n'
-    /*if(FunObj!==undefined && FunObj.ID===fun.ID){
+    if(FunObj!==undefined && FunObj.ID===fun.ID){
         Code+='//Puntero de la funcion\n'
         Code+='r=r-1;\n'
         Code+=FunObj.AsigTxt
-    }*/
+    }
     return{Valor:returnVal,Tipo:fun.Tipo}
     
 }
@@ -1334,7 +1337,7 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                     return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
                 } 
                 else if(OpDer.ID.toUpperCase()==="CHARAT"){
-                    let auxVal= getValor(OpDer.Params[0].Valor)
+                    let auxVal= getValor(OpDer.Params[0].Valor,ts)
                     Code+= `auxNum1=${OpIzq.Valor};\n`
                     Code+= `auxNum2=${auxVal.Valor};\n`
                     Code+= `charAt();\n`
@@ -1342,7 +1345,7 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                     return {Valor:getLastTemporal(),Tipo:Tipo_Valor.STRING}
                 }
                 else if(OpDer.ID.toUpperCase()==="CONCAT"){
-                    let auxVal= getValor(OpDer.Params[0].Valor)
+                    let auxVal= getValor(OpDer.Params[0].Valor,ts)
                     Code+= `auxNum1=${OpIzq.Valor};\n`
                     Code+= `auxNum2=${auxVal.Valor};\n`
                     Code+= `concatStrings();\n`
@@ -1415,7 +1418,7 @@ function traducirType(valor,ts){
  */
 function traducirNewArr(valor,ts) {
     
-    let auxVal=getValor(valor.Valor)
+    let auxVal=getValor(valor.Valor,ts)
     let auxArr=[]
     for(let i=0;i<auxVal.Valor;i++){
         Code+=`${generarTemporal()}=h;\n`
@@ -1496,7 +1499,7 @@ function getPropIndex(type,prop,ts){
  * @param {*} valor 
  */
 function procesarCadena(valor){
-    valor= String(valor).replaceAll(/\\n/g,'\n4')
+    valor= String(valor).replaceAll(/\\n/g,'\n')
     valor= String(valor).replaceAll(/\\r/g,'\r')
     valor= String(valor).replaceAll(/\\t/g,'\t')
     valor= String(valor).replaceAll(/\\\\/g,'\\')
