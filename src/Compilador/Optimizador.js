@@ -238,7 +238,10 @@ function codigoMuerto(arr){
             let temp2,aux2
             temp2=String(arr[i-1])
             //Se busca instruccion de la forma t[0-9]+=[0-9]+ op [0-9]+;
-            aux2=/(?<temp1>t[0-9]+)=(?<temp2>t[0-9]+)(?<op>[+*/-])(?<num>[0-9]+);/.exec(temp2)
+            aux2=/(?<temp1>t[0-9]+)=(?<temp2>t[0-9]+)(?<op>[<>/==//<=//>=//==//!=/])(?<num>[0-9]+);/.exec(temp2)
+            if(aux2){
+
+            }
         }
 
         //Regla 4
@@ -259,30 +262,70 @@ function codigoMuerto(arr){
                 aux3=/^\s*(?<etiqueta>L[0-9]+):$/.exec(temp3)
                 if(aux3){
                     if(aux3.groups.etiqueta===aux.groups.etiqueta){
-                        //Codigo Eliminado
-                        let tempStr
-                        tempStr=_.filter(arr,function(value,index) {
-                            return (index >= i && index <= i+2);
-                        }); 
-                        tempStr=tempStr.join("\n")
+                        let temp4,aux4,auxBool=false
+                        for(let j=0;j<i;j++){
+                            temp4=String(arr[j])
+                            //Se buscan instrucciones de la forma if (t[0-9]+) goto L[0-9];
+                            aux4=/^\s*if \((?<temp>t[0-9]+)\) goto (?<etiqueta>L[0-9]+);$/.exec(temp4)
+                            if(aux4){
+                                if(aux4.groups.etiqueta===aux.groups.etiqueta){
+                                    auxBool=true;
+                                    break
+                                }
+                            }
+                        }
 
-                        //Se cambia salto condicional
-                        arr[i]=arr[i].replace(aux.groups.etiqueta,aux2.groups.etiqueta)
-                        arr[i]=arr[i].replace(aux.groups.temp,"!"+aux.groups.temp)
-                        //Se remueve desde i+1 a i+2
-                        _.remove(arr, function(value,index) {
-                            return (index >= i+1 && index <= i+2);
-                        }); 
-                        temp=String(arr[i])
-                        let auxObj ={
-                            Tipo:"Bloques",
-                            Regla:"Regla 2",
-                            CodeE:tempStr,
-                            CodeA:temp,
-                            Fila: i+1
-                        } 
-                        optimizacionesArr.push(auxObj)
+                        if(auxBool){
+                            //Codigo Eliminado
+                            let tempStr
+                            tempStr=_.filter(arr,function(value,index) {
+                                return (index >= i && index <= i+1);
+                            }); 
+                            tempStr=tempStr.join("\n")
 
+                            //Se cambia salto condicional
+                            arr[i]=arr[i].replace(aux.groups.etiqueta,aux2.groups.etiqueta)
+                            arr[i]=arr[i].replace(aux.groups.temp,aux.groups.temp+'==0')
+                            //Se remueve desde i+1 a i+1
+                            _.remove(arr, function(value,index) {
+                                return (index >= i+1 && index <= i+1);
+                            }); 
+                            temp=String(arr[i])
+                            let auxObj ={
+                                Tipo:"Bloques",
+                                Regla:"Regla 2",
+                                CodeE:tempStr,
+                                CodeA:temp,
+                                Fila: i+1
+                            } 
+                            optimizacionesArr.push(auxObj)
+
+                        }
+                        else{
+                            //Codigo Eliminado
+                            let tempStr
+                            tempStr=_.filter(arr,function(value,index) {
+                                return (index >= i && index <= i+2);
+                            }); 
+                            tempStr=tempStr.join("\n")
+
+                            //Se cambia salto condicional
+                            arr[i]=arr[i].replace(aux.groups.etiqueta,aux2.groups.etiqueta)
+                            arr[i]=arr[i].replace(aux.groups.temp,aux.groups.temp+'==0')
+                            //Se remueve desde i+1 a i+2
+                            _.remove(arr, function(value,index) {
+                                return (index >= i+1 && index <= i+2);
+                            }); 
+                            temp=String(arr[i])
+                            let auxObj ={
+                                Tipo:"Bloques",
+                                Regla:"Regla 2",
+                                CodeE:tempStr,
+                                CodeA:temp,
+                                Fila: i+1
+                            } 
+                            optimizacionesArr.push(auxObj)
+                        }
                     }
                 }
             }

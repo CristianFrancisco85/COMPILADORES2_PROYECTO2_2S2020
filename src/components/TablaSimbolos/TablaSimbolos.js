@@ -54,7 +54,7 @@ class TablaSimbolos extends React.Component {
         <th>{simbolo.ID}</th>
         <th>{simbolo.Tipo}</th>
         <th>{simbolo.Rol}</th>
-        <th>{simbolo.Valor}</th>
+        <th>{JSON.stringify(simbolo.Valor)}</th>
       </tr>
     ));
 

@@ -130,7 +130,6 @@ export function Traducir (Instrucciones){
     TraducirBloque(AST,GlobalTS)
     Simbolos.push(GlobalTS.simbolos)
     console.log(GlobalTS)
-    console.log(Code+CodeFun)
     return generarEncabezado()
 }
 
@@ -155,7 +154,7 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
                 TypeDecExecute(instruccion,TS)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.ASIGNACION){
-                AsigTo3D(instruccion,TS)
+                AsigTo3D(instruccion,TS,FunObj)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.MAS_ASIGNACION){
 
@@ -375,14 +374,13 @@ function TypeDecExecute(instruccion,TS){
  * @param {*} instruccion 
  * @param {*} ts 
  */
-function AsigTo3D(instruccion,TS){
+function AsigTo3D(instruccion,TS,FunObj){
     //Si es una asignacion de atributos
     if(instruccion.ID.OpTipo!==undefined){
         Code+= `//Comienza asignacion de atributo\n`
+        let aux=traducirValor(instruccion.Valor,TS,true,FunObj)
         let auxSimb=TS.getValor(instruccion.ID.OpIzq,TS)
         let propIndex = getPropIndex(auxSimb.Tipo,instruccion.ID.OpDer,TS)
-        let aux=traducirValor(instruccion.Valor,TS,true)
-        console.log(aux)
         
         Code+=`${generarTemporal()}=${auxSimb.Valor}+${propIndex.Index};\n`
         Code+=`${getLastTemporal()}=${getLastTemporal()}+1;\n`    
@@ -393,11 +391,11 @@ function AsigTo3D(instruccion,TS){
     else{
         Code+= `//Comienza asignacion de ${instruccion.ID}\n`
         //Se obtiene variable
+        let aux=getValor(instruccion.Valor,TS,FunObj)
         let auxSimb=TS.getValor(instruccion.ID)
         if(auxSimb.Rol==="CONST"){
             throw Error("No se puede asignar constante "+auxSimb.ID)
         }
-        let aux=getValor(instruccion.Valor,TS)
 
         if(auxSimb.Tipo.includes("ARR")){
             auxSimb.Valor=aux.Valor
@@ -621,14 +619,14 @@ function FunCallTo3D(instruccion,TS,FunObj) {
 function IfTo3D (instruccion,TS,EtBegin,EtNext,FunObj){
     Code+="//Comienza traduccion de IF \n"
     let newTS = new TablaSimbolos(TS.simbolos)
-    let aux = getValor(instruccion.ExpresionLogica,TS)
+    //let aux = getValor(instruccion.ExpresionLogica,TS)
     let EtiquetaTrue=generarEtiqueta()
     let EtiquetaFalse=generarEtiqueta();
     let EtiquetaNext=generarEtiqueta()
 
-    Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
-    Code+= `goto ${EtiquetaFalse};\n`
-    
+    //Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
+    //Code+= `goto ${EtiquetaFalse};\n`
+    traducirCondicional(instruccion.ExpresionLogica,TS,EtiquetaTrue,EtiquetaFalse)
 
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.InstruccionesIf)?TraducirBloque(instruccion.InstruccionesIf,newTS,EtBegin,EtNext,FunObj):TraducirBloque([instruccion.InstruccionesIf],newTS,EtBegin,EtNext,FunObj)
@@ -727,9 +725,11 @@ function WhileTo3D(instruccion,TS,FunObj){
 
     Code+="//Comienza traduccion de While\n"
     Code+=`${EtiquetaBegin}:\n`
-    let aux = getValor(instruccion.ExpresionLogica,TS)
+    
+    /*let aux = getValor(instruccion.ExpresionLogica,TS)
     Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
-    Code+= `goto ${EtiquetaNext};\n`
+    Code+= `goto ${EtiquetaNext};\n`*/
+    traducirCondicional(instruccion.ExpresionLogica,newTS,EtiquetaTrue,EtiquetaNext)
 
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj)
@@ -754,9 +754,10 @@ function DoWhileTo3D(instruccion,TS,FunObj){
     Code+=`${EtiquetaBegin}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj)
 
-    let aux = getValor(instruccion.ExpresionLogica,TS)
+    /*let aux = getValor(instruccion.ExpresionLogica,TS)
     Code+= `if (${aux.Valor}) goto ${EtiquetaBegin};\n`
-    Code+= `goto ${EtiquetaNext};\n`
+    Code+= `goto ${EtiquetaNext};\n`*/
+    traducirCondicional(instruccion.ExpresionLogica,newTS,EtiquetaBegin,EtiquetaNext)
 
     Code+=`${EtiquetaNext}:\n`
     Code+="//Termina traduccion de Do-While\n"
@@ -777,9 +778,12 @@ function ForTo3D(instruccion,TS,FunObj){
     Code+="//Comienza traduccion de For\n"
     Array.isArray(instruccion.OperacionInicial)?TraducirBloque(instruccion.OperacionInicial,newTS):TraducirBloque([instruccion.OperacionInicial],newTS)
     Code+=`${EtiquetaBegin}:\n`
-    let aux = getValor(instruccion.ExpresionLogica,newTS)
+
+    /*let aux = getValor(instruccion.ExpresionLogica,newTS)
     Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
-    Code+= `goto ${EtiquetaNext};\n`
+    Code+= `goto ${EtiquetaNext};\n`*/
+    traducirCondicional(instruccion.ExpresionLogica,newTS,EtiquetaTrue,EtiquetaNext)
+
     Code+=`${EtiquetaTrue}:\n`
     Array.isArray(instruccion.Instrucciones)?TraducirBloque(instruccion.Instrucciones,newTS,EtiquetaBegin,EtiquetaNext,FunObj):TraducirBloque([instruccion.Instrucciones],newTS,EtiquetaBegin,EtiquetaNext,FunObj) 
     Array.isArray(instruccion.ExpresionPaso)?TraducirBloque(instruccion.ExpresionPaso,newTS):TraducirBloque([instruccion.ExpresionPaso],newTS) 
@@ -879,13 +883,40 @@ function ForInTo3D(instruccion,TS,FunObj){
 //FUNCIONES COMPLEMENTARIAS PARA TRADUCIR A 3D
 
 /**
+ * Traduce un condicional a 3D
+ */
+function traducirCondicional(valor,ts,EtiquetaTrue,EtiquetaFalse){
+    if(valor.OpTipo!==Tipo_Operacion.AND && valor.OpTipo!==Tipo_Operacion.OR){
+        let aux=getValor(valor,ts)
+        Code+= `if (${aux.Valor}) goto ${EtiquetaTrue};\n`
+        Code+= `goto ${EtiquetaFalse};\n`
+    }
+    else{
+        if(valor.OpTipo===Tipo_Operacion.AND){
+            let tempTrue=generarEtiqueta();
+            traducirCondicional(valor.OpIzq,ts,tempTrue,EtiquetaFalse)
+            Code+= `${tempTrue}:\n`
+            traducirCondicional(valor.OpDer,ts,EtiquetaTrue,EtiquetaFalse)
+        }
+        else{
+            let tempFalse=generarEtiqueta();
+            traducirCondicional(valor.OpIzq,ts,EtiquetaTrue,tempFalse)
+            Code+= `${tempFalse}:\n`
+            traducirCondicional(valor.OpDer,ts,EtiquetaTrue,EtiquetaFalse)
+        }
+
+    }
+
+}
+
+/**
  * Traduce un expresion, se usa para declaraciones y expresiones
  * @param {*} valor Expresion a traducir
  * @param {*} tabla de simbolos
  * @param {*} bool Indica si se va usar el heap 
  * @returns {*} Objeto {Valor:...,Tipo...}
  */
-function traducirValor(valor,ts,bool){
+function traducirValor(valor,ts,bool,FunObj){
     //VALOR PUNTUALES Y UNITARIOS 
     if(valor.Valor!==undefined){
         if(valor.Tipo===Tipo_Valor.STRING){
@@ -920,10 +951,16 @@ function traducirValor(valor,ts,bool){
         else if(valor.Tipo===Tipo_Valor.ID){
             let auxSimb=getValor(valor,ts)
             if(auxSimb.Tipo===Tipo_Valor.NUMBER||auxSimb.Tipo===Tipo_Valor.BOOLEAN){
-                Code+=generarTemporal()+"=p;\n"
-                Code+= `stack[(int)p] = ${auxSimb.Valor};\np=p+1;\n`
-                return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
-                
+                if(bool){
+                    Code+= generarTemporal()+"=h;\n"
+                    Code+= `heap[(int)h] = ${auxSimb.Valor};\nh=h+1;\n`
+                    return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
+                }
+                else{
+                    Code+=generarTemporal()+"=p;\n"
+                    Code+= `stack[(int)p] = ${auxSimb.Valor};\np=p+1;\n`
+                    return {Valor:getLastTemporal(),Tipo:auxSimb.Tipo}
+                }
             }
             else{
                 return {Valor:auxSimb.Valor,Tipo:auxSimb.Tipo}
@@ -962,7 +999,7 @@ function traducirValor(valor,ts,bool){
         } 
     }
     else if(valor.Tipo===Tipo_Instruccion.LLAMADA_FUNCION){
-        let aux = FunCallTo3D(valor,ts)
+        let aux = FunCallTo3D(valor,ts,FunObj)
         if(aux.Tipo===Tipo_Valor.NUMBER || aux.Tipo===Tipo_Valor.BOOLEAN){
             Code+=generarTemporal()+"=p;\n"
             Code+= `stack[(int)p] = ${aux.Valor};\np=p+1;\n`
@@ -1226,12 +1263,8 @@ function traducirOperacionBinaria(valor,ts,FunObj){
             }
             //TYPE-TYPE
             if(OpIzq.Tipo!==undefined && OpDer.Tipo!==undefined){
-                if(OpIzq.Tipo===OpDer.Tipo){
-                    return {Valor:1,Tipo:Tipo_Valor.BOOLEAN}
-                }
-                else{
-                    return {Valor:0,Tipo:Tipo_Valor.BOOLEAN}
-                }
+                Code+= `${generarTemporal()}=${OpIzq.Valor}==${OpDer.Valor};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
             return getLastTemporal()
         case Tipo_Operacion.NO_IGUAL:
@@ -1302,7 +1335,7 @@ function traducirOperacionBinaria(valor,ts,FunObj){
             Code+= generarTemporal()+"="+OpIzq.Valor+"||"+OpDer.Valor+";\n"
             return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
         case Tipo_Operacion.NOT:
-            Code+= generarTemporal()+"= !"+OpIzq.Valor+";\n"
+            Code+= generarTemporal()+"="+OpIzq.Valor+"==0;\n"
             return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
         case Tipo_Operacion.ATRIBUTO:
             OpDer=valor.OpDer
@@ -1458,7 +1491,7 @@ function traducirArray(valor,ts){
         Code+='h=h+1;\n'
     });
 
-    return {Valor:referencia,Tipo:"ARR"}
+    return {Valor:referencia,Tipo:aux.Tipo+"_ARR"}
 }
 
 /**
