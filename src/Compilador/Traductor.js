@@ -49,8 +49,9 @@ class TablaSimbolos {
      * @param tipo2 Tipo para hacer verificacion
      */
     nuevoSimbolo(id,tipo,rol,valor,tipo2) {
+        id=id.toLowerCase()
         let simbolo = _.filter(this.simbolos,function(simb) {
-            return simb.ID===id;
+            return simb.ID===id&&simb.Rol!=="TYPE";
         });
         if(simbolo.length===0){
             if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION||tipo2===Tipo_Instruccion.BLOQUE_TERNARIO||tipo2===Tipo_Valor.NEWARR){
@@ -95,10 +96,13 @@ class TablaSimbolos {
      * Obtiene el valor de un símbolo
      * @param id 
      */
-    getValor(id) {
-
+    getValor(id,bool) {
+        id=id.toLowerCase()
         let simbolo = _.filter(this.simbolos,function(simb) {
-            return simb.ID===id;
+            if(bool){
+                return simb.ID===id
+            }
+            return simb.ID===id&&simb.Rol!=="TYPE";
         });
         simbolo=simbolo[0]
         if (simbolo){
@@ -379,7 +383,7 @@ function AsigTo3D(instruccion,TS,FunObj){
     if(instruccion.ID.OpTipo!==undefined){
         Code+= `//Comienza asignacion de atributo\n`
         let aux=traducirValor(instruccion.Valor,TS,true,FunObj)
-        let auxSimb=TS.getValor(instruccion.ID.OpIzq,TS)
+        let auxSimb=TS.getValor(instruccion.ID.OpIzq)
         let propIndex = getPropIndex(auxSimb.Tipo,instruccion.ID.OpDer,TS)
         
         Code+=`${generarTemporal()}=${auxSimb.Valor}+${propIndex.Index};\n`
@@ -512,11 +516,11 @@ function DecFunTo3D(instruccion,TS,bool){
     });
     
 
-    CodeDec+=`void ${instruccion.ID}();\n`
+    CodeDec+=`void ${instruccion.ID.toLowerCase()}();\n`
     let functionPtr = generarTemporal();
     let newTS = new TablaSimbolos(TS.simbolos)
     let EtiquetaNext = generarEtiqueta()
-    CodeFun+=`void ${instruccion.ID}(){\n\n`
+    CodeFun+=`void ${instruccion.ID.toLowerCase()}(){\n\n`
 
     CodeFun+=`stackR[(int)r]=p;\n`
     
@@ -1109,7 +1113,7 @@ function traducirOperacionBinaria(valor,ts,FunObj){
 
     let OpIzq=getValor(valor.OpIzq,ts,FunObj)
     let OpDer
-    if(valor.OpDer!==undefined&&valor.OpTipo!==Tipo_Operacion.ATRIBUTO){
+    if(valor.OpDer!==undefined&&valor.OpTipo!==Tipo_Operacion.ATRIBUTO&&valor.OpTipo!==Tipo_Operacion.AND&&valor.OpTipo!==Tipo_Operacion.OR){
     OpDer=getValor(valor.OpDer,ts,FunObj)
     }
     
@@ -1283,7 +1287,7 @@ function traducirOperacionBinaria(valor,ts,FunObj){
                 Code+= `auxNum1=${OpIzq.Valor};\n`
                 Code+= `auxNum2=${OpDer.Valor};\n`
                 Code+= `compareStrings();\n`
-                Code+= generarTemporal()+"=!auxNum5;\n"
+                Code+= generarTemporal()+"=auxNum5==0;\n"
                 return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
             //ARRAY-ARRAY
@@ -1320,20 +1324,39 @@ function traducirOperacionBinaria(valor,ts,FunObj){
             }
             //TYPE-TYPE
             if(OpIzq.Tipo!==undefined && OpDer.Tipo!==undefined){
-                if(OpIzq.Tipo===OpDer.Tipo){
-                    return {Valor:0,Tipo:Tipo_Valor.BOOLEAN}
-                }
-                else{
-                    return {Valor:1,Tipo:Tipo_Valor.BOOLEAN}
-                }
+                Code+= `${generarTemporal()}=${OpIzq.Valor}!=${OpDer.Valor};\n`
+                return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
             }
             return getLastTemporal()
-        case Tipo_Operacion.AND:
-            Code+= generarTemporal()+"="+OpIzq.Valor+"&&"+OpDer.Valor+";\n"
-            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
-        case Tipo_Operacion.OR:
-            Code+= generarTemporal()+"="+OpIzq.Valor+"||"+OpDer.Valor+";\n"
-            return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
+        case Tipo_Operacion.AND:{
+            let aux=generarTemporal()
+            let tempTrue=generarEtiqueta();
+            let tempFalse=generarEtiqueta();
+            Code+= `${aux}=0;\n`
+            Code+= `if (${OpIzq.Valor}) goto ${tempTrue};\n`
+            Code+= `goto ${tempFalse};\n`
+            Code+= `${tempTrue}:\n`
+            OpDer=getValor(valor.OpDer,ts,FunObj)
+            Code+= `if (${OpDer.Valor}) ${aux}=1;\n`
+            Code+= `${tempFalse}:\n`
+            //Code+=generarTemporal()+"="+OpIzq.Valor+"&&"+OpDer.Valor+";\n"
+            return {Valor:aux,Tipo:Tipo_Valor.BOOLEAN}
+        }
+        case Tipo_Operacion.OR:{
+            let aux=generarTemporal()
+            let tempTrue=generarEtiqueta();
+            let tempFalse=generarEtiqueta();
+            Code+= `${aux}=0;\n`
+            Code+= `if (${OpIzq.Valor}) goto ${tempTrue};\n`
+            OpDer=getValor(valor.OpDer,ts,FunObj)
+            Code+= `if (${OpDer.Valor}) goto ${tempTrue};\n`
+            Code+= `goto ${tempFalse};\n`
+            Code+= `${tempTrue}:\n`
+            Code+= `${aux}=1;\n`
+            Code+= `${tempFalse}:\n`
+            //Code+= generarTemporal()+"="+OpIzq.Valor+"||"+OpDer.Valor+";\n"
+            return {Valor:aux,Tipo:Tipo_Valor.BOOLEAN}
+        }
         case Tipo_Operacion.NOT:
             Code+= generarTemporal()+"="+OpIzq.Valor+"==0;\n"
             return {Valor:getLastTemporal(),Tipo:Tipo_Valor.BOOLEAN}
@@ -1452,7 +1475,7 @@ function traducirType(valor,ts){
 function traducirNewArr(valor,ts) {
     
     let auxVal=getValor(valor.Valor,ts)
-    let auxArr=[]
+    let auxArr=[]    
     for(let i=0;i<auxVal.Valor;i++){
         Code+=`${generarTemporal()}=h;\n`
         Code+='h=h+1;\n'
@@ -1516,11 +1539,11 @@ function traducirString(valor){
  */
 function getPropIndex(type,prop,ts){
     let aux = _.filter(ts.simbolos,function(simb) {
-        return simb.ID===type;
+        return simb.ID===type.toLowerCase();
     });
     let aux2;
     aux[0].Valor.forEach((element,index)=>{
-        if(element.ID===prop){
+        if(element.ID.toLowerCase()===prop.toLowerCase()){
             aux2={Index:index,Tipo:element.Tipo}
         }
     });
@@ -1818,6 +1841,8 @@ void ToLowerCase(){
     goto L0;
     
     L4:
+    heap[(int)h]=-1;
+    h=h+1;
     return;
 }
 void ToUpperCase(){
@@ -1839,6 +1864,8 @@ void ToUpperCase(){
     goto L0;
     
     L4:
+    heap[(int)h]=-1;
+    h=h+1;
     return;
 }
 void stringLength(){

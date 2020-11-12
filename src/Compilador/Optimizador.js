@@ -2,10 +2,10 @@ import {Optimizaciones,TraduccionTxt} from '../scripts/mainScript.js'
 import {myfuns} from './Traductor'
 
 const _ = require('lodash')
-let optimizacionesArr=[]
+let optimizacionesArr
 
 export function start(){
-
+    optimizacionesArr=[]
     let tempText= TraduccionTxt.replace(myfuns,"")
     let result=optimize(tempText)
     Optimizaciones.push(optimizacionesArr)
@@ -230,7 +230,7 @@ function codigoMuerto(arr){
             }
         }
 
-        //Regla 3 
+        //Regla 3 y 4 
         temp=String(arr[i])
         //Se buscan instrucciones de la forma if (t[0-9]+) goto L[0-9];
         aux=/^\s*if \((?<temp>t[0-9]+)\) goto (?<etiqueta>L[0-9]+);$/.exec(temp)
@@ -238,13 +238,104 @@ function codigoMuerto(arr){
             let temp2,aux2
             temp2=String(arr[i-1])
             //Se busca instruccion de la forma t[0-9]+=[0-9]+ op [0-9]+;
-            aux2=/(?<temp1>t[0-9]+)=(?<temp2>t[0-9]+)(?<op>[<>/==//<=//>=//==//!=/])(?<num>[0-9]+);/.exec(temp2)
+            aux2=/(?<temp1>t[0-9]+)=(?<num1>[0-9]+)(?<op><|>|<=|>=|==|!=)(?<num2>[0-9]+);/.exec(temp2)
             if(aux2){
-
+                //Regla 3
+                if(getBoolean(aux2.groups.num1,aux2.groups.num2,aux2.groups.op)){
+                    //Codigo eliminado
+                    let tempStr
+                    tempStr=_.filter(arr,function(value,index) {
+                        return (index >= i-1 && index <= i+1);
+                    }); 
+                    tempStr=tempStr.join("\n")
+                    arr[i]=`goto ${aux.groups.etiqueta};`
+                    //Se elimina i-1 y i+1
+                    _.remove(arr, function(value,index) {
+                        return (index === i-1 || index === i+1);
+                    });
+                    let auxObj ={
+                        Tipo:"Bloques",
+                        Regla:"Regla 3",
+                        CodeE:tempStr,
+                        CodeA:`goto ${aux.groups.etiqueta};`,
+                        Fila: i+1
+                    } 
+                    optimizacionesArr.push(auxObj)
+                }
+                //Regla 4
+                else{
+                    //Codigo eliminado
+                    let tempStr
+                    tempStr=_.filter(arr,function(value,index) {
+                        return (index >= i-1 && index <= i);
+                    }); 
+                    tempStr=tempStr.join("\n")
+                    //Se elimina i-1 y i
+                    _.remove(arr, function(value,index) {
+                        return (index === i-1 || index === i);
+                    });
+                    let auxObj ={
+                        Tipo:"Bloques",
+                        Regla:"Regla 4",
+                        CodeE:tempStr,
+                        CodeA:'-',
+                        Fila: i+1
+                    } 
+                    optimizacionesArr.push(auxObj)
+                }
             }
         }
+        //Regla 3 y 4 con condicional 0 o 1
+        temp=String(arr[i])
+        //Se buscan instrucciones de la forma if (t[0-9]+) goto L[0-9];
+        aux=/^\s*if \((?<temp>0|1+)\) goto (?<etiqueta>L[0-9]+);$/.exec(temp)
+        if(aux){
+            //Regla 3
+            if(Number(aux.groups.temp)===1){
+                //Codigo eliminado
+                let tempStr
+                tempStr=_.filter(arr,function(value,index) {
+                    return (index >= i && index <= i+1);
+                }); 
+                tempStr=tempStr.join("\n")
+                arr[i]=`goto ${aux.groups.etiqueta};`
+                //Se elimina i y i+1
+                _.remove(arr, function(value,index) {
+                    return (index === i || index === i+1);
+                });
+                let auxObj ={
+                    Tipo:"Bloques",
+                    Regla:"Regla 3",
+                    CodeE:tempStr,
+                    CodeA:`goto ${aux.groups.etiqueta};`,
+                    Fila: i+1
+                } 
+                optimizacionesArr.push(auxObj)
+            }
+            //Regla 4
+            else{
+                //Codigo eliminado
+                let tempStr
+                tempStr=_.filter(arr,function(value,index) {
+                    return (index >= i && index <= i);
+                }); 
+                tempStr=tempStr.join("\n")
+                //Se elimina i y i
+                _.remove(arr, function(value,index) {
+                    return (index === i|| index === i);
+                });
+                let auxObj ={
+                    Tipo:"Bloques",
+                    Regla:"Regla 4",
+                    CodeE:tempStr,
+                    CodeA:'-',
+                    Fila: i+1
+                } 
+                optimizacionesArr.push(auxObj)
+            }
+            
+        }
 
-        //Regla 4
 
         //Regla 2
         temp=String(arr[i])
@@ -371,6 +462,33 @@ function redundancia(arr){
 
             }
         }
+    }
+
+}
+
+
+function getBoolean(num1,num2,operador){
+
+    switch(operador){
+        case ">":{
+            return Number(num1)>Number(num2)
+        }
+        case "<":{
+            return Number(num1)<Number(num2)
+        }
+        case ">=":{
+            return Number(num1)>=Number(num2)
+        }
+        case "<=":{
+            return Number(num1)<=Number(num2)
+        }
+        case "!=":{
+            return Number(num1)!==Number(num2)
+        }
+        case "==":{
+            return Number(num1)===Number(num2)
+        }
+        default:
     }
 
 }
