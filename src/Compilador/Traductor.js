@@ -18,7 +18,17 @@ let GlobalTS
  * @param valor Valor del simbolo
  * @param rol Rol del simbolo
  */
-function crearSimbolo(id,tipo,valor,rol) {
+function crearSimbolo(id,tipo,valor,rol,Global) {
+    if(Global){
+        return {
+            ID: id,
+            Tipo: tipo,
+            Valor:valor,
+            Rol:rol,
+            Global:Global
+        }
+
+    }
     return {
         ID: id,
         Tipo: tipo,
@@ -48,14 +58,19 @@ class TablaSimbolos {
      * @param rol Rol del simbolo
      * @param tipo2 Tipo para hacer verificacion
      */
-    nuevoSimbolo(id,tipo,rol,valor,tipo2) {
+    nuevoSimbolo(id,tipo,rol,valor,tipo2,Global) {
         id=id.toLowerCase()
         let simbolo = _.filter(this.simbolos,function(simb) {
             return simb.ID===id&&simb.Rol!=="TYPE";
         });
-        if(simbolo.length===0){
-            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION||tipo2===Tipo_Instruccion.BLOQUE_TERNARIO||tipo2===Tipo_Valor.NEWARR){
-                this.simbolos.push(crearSimbolo(id,tipo,valor,rol));
+        if(simbolo.length===0||simbolo[0].Global===true){
+            if(tipo2===undefined||tipo2===Tipo_Valor.ID||tipo2===tipo||tipo2===Tipo_Valor.NULL||tipo2===Tipo_Instruccion.LLAMADA_FUNCION||tipo2===Tipo_Instruccion.BLOQUE_TERNARIO||tipo2===Tipo_Valor.NEWARR){               
+                if(simbolo.length!==0 && simbolo[0].Global===true){
+                    _.remove(this.simbolos,function(simb) {
+                        return simb.ID===simbolo[0].ID;
+                    });
+                }
+                this.simbolos.push(crearSimbolo(id,tipo,valor,rol,Global));
             }
             else{
                 throw Error (`Variable ${id} es de tipo ${tipo} no se le puede asignar ${tipo2}`)
@@ -131,14 +146,14 @@ export function Traducir (Instrucciones){
     Console.setValue("")
     AST=JSON.parse(JSON.stringify(Instrucciones))
     //BuscarDec(AST,GlobalTS)
-    TraducirBloque(AST,GlobalTS)
+    TraducirBloque(AST,GlobalTS,undefined,undefined,undefined,true)
     Simbolos.push(GlobalTS.simbolos)
     console.log(GlobalTS)
     return generarEncabezado()
 }
 
 
-function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
+function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj,Global){
 
 
     Instrucciones.forEach(instruccion => {
@@ -149,10 +164,10 @@ function TraducirBloque(Instrucciones,TS,EtiquetaBegin,EtiquetaNext,FunObj){
                 throw Error("Intruccion Invalida")
             }
             else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_LET){
-                LetDecTo3D(instruccion,TS)
+                LetDecTo3D(instruccion,TS,Global)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_CONST){
-                ConstDecTo3D(instruccion,TS)
+                ConstDecTo3D(instruccion,TS,Global)
             }
             else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_TYPE){
                 TypeDecExecute(instruccion,TS)
@@ -259,9 +274,6 @@ function BuscarDec(Instrucciones,TablaSimbolos){
         else if(instruccion.Tipo===Tipo_Instruccion.DECLARACION_TYPE){
             TypeDecExecute(instruccion,TablaSimbolos);
         }
-        else if(instruccion.Tipo===Tipo_Instruccion.DECL_FUNCION){
-            //FunDecExecute(instruccion,TablaSimbolos)
-        }
         
     }
     catch(e){
@@ -334,13 +346,13 @@ function ConsoleLogTo3D(instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function LetDecTo3D (instruccion,TS){
+function LetDecTo3D (instruccion,TS,Global){
     let aux; 
 
     instruccion.ID.forEach((element) => {
         Code+= `//Comienza declaracion de ${element.ID}\n`  
         aux=traducirValor(element.Valor,TS)
-        TS.nuevoSimbolo(element.ID,element.Tipo,"LET",aux.Valor,element.Valor.Tipo);
+        TS.nuevoSimbolo(element.ID,element.Tipo,"LET",aux.Valor,element.Valor.Tipo,Global);
         Code+= `//Termina declaracion de ${element.ID}\n`
     });
 
@@ -351,13 +363,13 @@ function LetDecTo3D (instruccion,TS){
  * @param {*} Instruccion Bloque que contiene la instruccion   
  * @param {TablaSimbolos} TS Tabla de Simbolos
  */
-function ConstDecTo3D (instruccion,TS){
+function ConstDecTo3D (instruccion,TS,Global){
     let aux; 
 
     instruccion.ID.forEach((element) => {
         Code+= `//Comienza declaracion de ${element.ID}\n`  
         aux=traducirValor(element.Valor,TS)
-        TS.nuevoSimbolo(element.ID,element.Tipo,"CONST",aux.Valor,element.Valor.Tipo);
+        TS.nuevoSimbolo(element.ID,element.Tipo,"CONST",aux.Valor,element.Valor.Tipo,Global);
         Code+= `//Termina declaracion de ${element.ID}\n`
     });
 
