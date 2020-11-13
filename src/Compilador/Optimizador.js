@@ -99,7 +99,7 @@ function algebraicaReduccion(arr){
             //Regla 10
             else if(aux.groups.op==="+"&&aux.groups.num==="0"){
                 let auxObj ={
-                    Tipo:"-",
+                    Tipo:"Mirilla",
                     Regla:"Regla 10",
                     CodeE:temp,
                     CodeA:`${aux.groups.temp1}=${aux.groups.temp2};`,
@@ -111,7 +111,7 @@ function algebraicaReduccion(arr){
             //Regla 11
             else if(aux.groups.op==="-"&&aux.groups.num==="0"){
                 let auxObj ={
-                    Tipo:"-",
+                    Tipo:"Mirilla",
                     Regla:"Regla 11",
                     CodeE:temp,
                     CodeA:`${aux.groups.temp1}=${aux.groups.temp2};`,
@@ -123,7 +123,7 @@ function algebraicaReduccion(arr){
             //Regla 12
             else if(aux.groups.op==="*"&&aux.groups.num==="1"){
                 let auxObj ={
-                    Tipo:"-",
+                    Tipo:"Mirilla",
                     Regla:"Regla 12",
                     CodeE:temp,
                     CodeA:`${aux.groups.temp1}=${aux.groups.temp2};`,
@@ -135,7 +135,7 @@ function algebraicaReduccion(arr){
             //Regla 13
             else if(aux.groups.op==="/"&&aux.groups.num==="1"){
                 let auxObj ={
-                    Tipo:"-",
+                    Tipo:"Mirilla",
                     Regla:"Regla 13",
                     CodeE:temp,
                     CodeA:`${aux.groups.temp1}=${aux.groups.temp2};`,
@@ -147,7 +147,7 @@ function algebraicaReduccion(arr){
             //Regla 14
             else if(aux.groups.op==="*"&&aux.groups.num==="2"){
                 let auxObj ={
-                    Tipo:"-",
+                    Tipo:"Mirilla",
                     Regla:"Regla 14",
                     CodeE:temp,
                     CodeA:`${aux.groups.temp1}=${aux.groups.temp2}+${aux.groups.temp2};`,
@@ -159,7 +159,7 @@ function algebraicaReduccion(arr){
             //Regla 15
             else if(aux.groups.op==="*"&&aux.groups.num==="0"){
                 let auxObj ={
-                    Tipo:"-",
+                    Tipo:"Mirilla",
                     Regla:"Regla 15",
                     CodeE:temp,
                     CodeA:`${aux.groups.temp1}=0;`,
@@ -167,8 +167,104 @@ function algebraicaReduccion(arr){
                 } 
                 arr[i]=auxObj.CodeA
                 optimizacionesArr.push(auxObj)
+            }            
+        }
+        else{
+            //Se buscan instrucciones de la forma temp=temp operador op;
+            aux=/(?<temp1>t[0-9]+)=(?<num>[0-9]+)(?<op>[+*/-])(?<temp2>t[0-9]+);/.exec(temp)
+            if(aux){
+                console.log(aux);
+                //Reglas 6,7,8
+                if(aux.groups.temp1===aux.groups.temp2){
+                    //Regla 6
+                    if(aux.groups.op==="+"&&aux.groups.num==="0"){
+                        optimizacionesArr.push({
+                            Tipo:"Mirrila",
+                            Regla:"Regla 6",
+                            CodeE:temp,
+                            CodeA:"-",
+                            Fila: i+1
+                        }) 
+                        _.remove(arr, function(value,index) {
+                            return index === i;
+                        });  
+                    }
+                    //Regla 8
+                    if(aux.groups.op==="*"&&aux.groups.num==="1"){
+                        optimizacionesArr.push({
+                            Tipo:"Mirilla",
+                            Regla:"Regla 8",
+                            CodeE:temp,
+                            CodeA:"-",
+                            Fila: i+1
+                        }) 
+                        _.remove(arr, function(value,index) {
+                            return index === i;
+                        });   
+                    }
+                }
+            
+                //Regla 10
+                else if(aux.groups.op==="+"&&aux.groups.num==="0"){
+                    let auxObj ={
+                        Tipo:"Mirilla",
+                        Regla:"Regla 10",
+                        CodeE:temp,
+                        CodeA:`${aux.groups.temp1}=${aux.groups.temp2};`,
+                        Fila: i+1
+                    } 
+                    arr[i]=auxObj.CodeA
+                    optimizacionesArr.push(auxObj)
+                }
+                //Regla 12
+                else if(aux.groups.op==="*"&&aux.groups.num==="1"){
+                    let auxObj ={
+                        Tipo:"Mirilla",
+                        Regla:"Regla 12",
+                        CodeE:temp,
+                        CodeA:`${aux.groups.temp1}=${aux.groups.temp2};`,
+                        Fila: i+1
+                    } 
+                    arr[i]=auxObj.CodeA
+                    optimizacionesArr.push(auxObj)
+                }
+                //Regla 14
+                else if(aux.groups.op==="*"&&aux.groups.num==="2"){
+                    let auxObj ={
+                        Tipo:"Mirilla",
+                        Regla:"Regla 14",
+                        CodeE:temp,
+                        CodeA:`${aux.groups.temp1}=${aux.groups.temp2}+${aux.groups.temp2};`,
+                        Fila: i+1
+                    } 
+                    arr[i]=auxObj.CodeA
+                    optimizacionesArr.push(auxObj)
+                }
+                //Regla 15
+                else if(aux.groups.op==="*"&&aux.groups.num==="0"){
+                    let auxObj ={
+                        Tipo:"Mirilla",
+                        Regla:"Regla 15",
+                        CodeE:temp,
+                        CodeA:`${aux.groups.temp1}=0;`,
+                        Fila: i+1
+                    } 
+                    arr[i]=auxObj.CodeA
+                    optimizacionesArr.push(auxObj)
+                }
+                //Regla 16
+                else if(aux.groups.op==="/"&&aux.groups.num==="0"){
+                    let auxObj ={
+                        Tipo:"Mirilla",
+                        Regla:"Regla 16",
+                        CodeE:temp,
+                        CodeA:`${aux.groups.temp1}=0;`,
+                        Fila: i+1
+                    } 
+                    arr[i]=auxObj.CodeA
+                    optimizacionesArr.push(auxObj)
+                }
             }
-
             
         }
 
